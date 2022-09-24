@@ -1,6 +1,6 @@
 [submodule "thirdparty/c-logger"]
 	path = thirdparty/c-logger
-	url = https://github.com/yksz/c-logger.git
+	url = https://github.com/NikBel3476/c-logger.git
 [submodule "thirdparty/corrosion"]
     path = thirdparty/corrosion
     url = https://github.com/corrosion-rs/corrosion.git
