@@ -7,8 +7,6 @@
     "description": "Evacuation - программа моделирования движения людей в здании.",
     "scripts": {
         "dev": "vite",
-        "dev:vite": "vite",
-        "dev:rescript": "rescript build -w",
         "build": "rescript && tsc && vite build",
         "preview": "vite preview",
         "test": "vitest",
@@ -50,7 +48,6 @@
         "@vitejs/plugin-react": "^3.1.0",
         "@vitest/coverage-c8": "^0.28.4",
         "autoprefixer": "^10.4.13",
-        "concurrently": "^7.6.0",
         "cypress": "^12.5.1",
         "eslint": "^8.35.0",
         "eslint-config-prettier": "^8.6.0",
