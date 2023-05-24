@@ -23,6 +23,7 @@ pub enum BimElementSign {
 }
 
 /// Структура, описывающая элемент
+#[derive(Debug)]
 pub struct BimJsonElement {
 	/// [JSON] UUID идентификатор элемента
 	pub uuid: Uuid,
@@ -75,6 +76,7 @@ pub struct BimJsonObject {
 }
 
 pub fn bim_json_object_new(path_to_file: &str) -> BimJsonObject {
+	// TODO: remove renga search in path
 	let building = match path_to_file.contains("renga") {
 		true => Box::new(BuildingStruct::from(
 			BuildingStructRenga::parse_building_from_json(path_to_file)
@@ -104,7 +106,7 @@ pub fn bim_json_object_new(path_to_file: &str) -> BimJsonObject {
 					.build_elements
 					.iter()
 					.map(|element| BimJsonElement {
-						uuid: element.id.clone(),
+						uuid: element.id,
 						name: element.name.clone(),
 						id: match element.sign.as_str() {
 							"Room" | "Staircase" => {
@@ -133,12 +135,10 @@ pub fn bim_json_object_new(path_to_file: &str) -> BimJsonObject {
 							_ => BimElementSign::Undefined,
 						},
 						outputs: element.outputs.clone(),
-						polygon: bim_polygon_tools::Polygon {
-							points: match element.xy.is_empty() {
-								true => vec![],
-								false => element.xy[0].points.clone(),
-							},
-						},
+						polygon: bim_polygon_tools::Polygon::from(match element.xy.is_empty() {
+							true => &[],
+							false => element.xy[0].points.as_slice(),
+						}),
 					})
 					.collect::<Vec<BimJsonElement>>(),
 			})

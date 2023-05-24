@@ -1,7 +1,7 @@
 use super::json_object::Point;
+use spade::{ConstrainedDelaunayTriangulation, Point2, Triangulation};
 use std::cmp::Ordering;
-use std::ffi::CString;
-use triangle_rs::{triangulate, triangulateio};
+use triangle_rs::Delaunay;
 
 pub struct Line {
 	pub p1: Point,
@@ -11,87 +11,117 @@ pub struct Line {
 #[derive(Debug, Clone, Default)]
 pub struct Polygon {
 	pub points: Vec<Point>,
+	// delaunay: Delaunay,
 }
 
 impl Polygon {
-	pub fn area(&self) -> f64 {
-		let num_of_triangle_corner = (self.points.len() - 2) * 3;
-
-		let mut triangle_list = vec![0; num_of_triangle_corner];
-
-		let number_of_triangles = self.triangulate(&mut triangle_list);
-
-		// calculate the area by the formula S=(p(p-ab)(p-bc)(p-ca))^0.5;
-		// p=(ab+bc+ca)0.5
-		let mut area_element = 0.0;
-		for i in 0..number_of_triangles {
-			let a = &self.points[triangle_list[(i * 3) as usize] as usize];
-			let b = &self.points[triangle_list[(i * 3 + 1) as usize] as usize];
-			let c = &self.points[triangle_list[(i * 3 + 2) as usize] as usize];
-			let ab = a.distance_to(b);
-			let bc = b.distance_to(c);
-			let ca = c.distance_to(a);
-			let p = (ab + bc + ca) * 0.5;
-			area_element += (p * (p - ab) * (p - bc) * (p - ca)).sqrt();
-		}
-
-		area_element
-	}
-
 	/// #Returns
 	/// Массив номеров точек треугольников
 	///
 	/// https://userpages.umbc.edu/~rostamia/cbook/triangle.html
-	pub fn triangulate(&self, triangle_list: &mut [i32]) -> u64 {
-		let mut point_list = vec![0.0; 2 * self.points.len()];
+	pub fn triangulate(&self) -> ConstrainedDelaunayTriangulation<Point2<f64>> {
+		// let polygon = self
+		// 	.points
+		// 	.iter()
+		// 	.flat_map(|point| vec![point.x, point.y])
+		// 	.collect::<Vec<f64>>();
+		//
+		// let tri = triangle_rs::Builder::new()
+		// 	.set_switches("pQ")
+		// 	.add_polygon(&polygon)
+		// 	.build();
+		//
+		// tri
 
-		for i in 0..self.points.len() {
-			point_list[i * 2] = self.points[i].x;
-			point_list[i * 2 + 1] = self.points[i].y;
-		}
+		let mut cdt = ConstrainedDelaunayTriangulation::<Point2<f64>>::new();
+		self.points.chunks(2).for_each(|points| match points.len() {
+			2 => {
+				let vertex0 = Point2::new(points[0].x, points[0].y);
+				let vertex1 = Point2::new(points[1].x, points[1].y);
+				cdt.insert(vertex0).unwrap_or_else(|err| {
+					panic!("{err}\n{:?}", points[0]);
+				});
+				cdt.insert(vertex1).unwrap_or_else(|err| {
+					panic!("{err}\n{:?}", points[1]);
+				});
 
-		let mut polygon_to_triangulate = triangulateio {
-			pointlist: point_list.as_mut_ptr(),
-			pointattributelist: std::ptr::null_mut(),
-			pointmarkerlist: std::ptr::null_mut(),
-			numberofpoints: self.points.len() as i32,
-			trianglelist: triangle_list.as_mut_ptr(), // Индексы точек треугольников против часовой стрелки
-			numberofpointattributes: 0,
-			triangleattributelist: std::ptr::null_mut(),
-			trianglearealist: std::ptr::null_mut(),
-			neighborlist: std::ptr::null_mut(),
-			numberoftriangles: 0,
-			numberofcorners: 0,
-			numberoftriangleattributes: 0,
-			segmentlist: std::ptr::null_mut(),
-			segmentmarkerlist: std::ptr::null_mut(),
-			numberofsegments: 0,
-			holelist: std::ptr::null_mut(),
-			numberofholes: 0,
-			regionlist: std::ptr::null_mut(),
-			numberofregions: 0,
-			edgelist: std::ptr::null_mut(),
-			edgemarkerlist: std::ptr::null_mut(),
-			normlist: std::ptr::null_mut(),
-			numberofedges: 0,
-		};
+				cdt.add_constraint_edge(vertex0, vertex1)
+					.unwrap_or_else(|err| {
+						panic!("{err}\n{:?}\n{:?}", vertex0, vertex1);
+					});
+			}
+			1 => {
+				let vertex0 = Point2::new(points[0].x, points[0].y);
+				let vertex1 = Point2::new(self.points[0].x, self.points[0].y);
+				cdt.insert(vertex0).unwrap_or_else(|err| {
+					panic!("{err}\n{:?}", points[0]);
+				});
 
-		let triswitches = CString::new("zQ").unwrap_or_else(|_| {
-			panic!("Failed to create CString from \"zQ\" at triangle_polygon_rust fn in bim_polygon_tools crate")
+				cdt.add_constraint_edge(vertex0, vertex1)
+					.unwrap_or_else(|err| {
+						panic!("{err}\n{:?}\n{:?}", vertex0, vertex1);
+					});
+			}
+			_ => {}
 		});
-		unsafe {
-			triangulate(
-				triswitches.into_raw(),
-				&mut polygon_to_triangulate,
-				&mut polygon_to_triangulate,
-				std::ptr::null_mut(),
-			)
+
+		cdt
+	}
+
+	pub fn area(&self) -> f64 {
+		// let tri = self.triangulate();
+		// Ok(self.delaunay.area())
+		let cdt = self.triangulate();
+		cdt.inner_faces()
+			.fold(0.0, |area, triangle| area + triangle.area())
+	}
+
+	pub fn is_point_inside(&self, point: &Point) -> Result<bool, String> {
+		if self.points.len() < 3 {
+			return Err(String::from("Less than 3 vertices"));
 		}
 
-		u64::try_from(polygon_to_triangulate.numberoftriangles).unwrap_or_else(|e| {
-			panic!("Failed to convert numberoftriangles to u64 at triangle_polygon_rust fn in bim_polygon_tools crate. {e}")
-		})
+		// let tri = self.triangulate();
+		// Ok(self.delaunay.is_point_inside(&[point.x, point.y]))
+		let cdt = self.triangulate();
+		Ok(cdt.inner_faces().any(|face| {
+			let [a, b, c] = face.vertices();
+			let d1 = self.sign(point, &a.position(), &b.position());
+			let d2 = self.sign(point, &b.position(), &c.position());
+			let d3 = self.sign(point, &c.position(), &a.position());
+			let has_neg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+			let has_pos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+
+			!(has_neg && has_pos)
+		}))
 	}
+
+	fn sign(&self, p1: &Point, p2: &Point2<f64>, p3: &Point2<f64>) -> f64 {
+		(p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+	}
+}
+
+impl From<&[Point]> for Polygon {
+	fn from(points: &[Point]) -> Self {
+		Self {
+			points: points.to_vec(),
+			// delaunay: triangulate(points),
+		}
+	}
+}
+
+fn triangulate(points: &[Point]) -> Delaunay {
+	let polygon = points
+		.iter()
+		.flat_map(|point| vec![point.x, point.y])
+		.collect::<Vec<f64>>();
+
+	let tri = triangle_rs::Builder::new()
+		.set_switches("pQ")
+		.add_polygon(&polygon)
+		.build();
+
+	tri
 }
 
 fn where_point_rust(a_ax: f64, a_ay: f64, a_bx: f64, a_by: f64, a_px: f64, a_py: f64) -> i32 {
@@ -120,29 +150,14 @@ fn is_point_in_triangle(
 	q1 >= 0 && q2 >= 0 && q3 >= 0
 }
 
-pub fn is_point_in_polygon(point: &Point, polygon: &Polygon) -> bool {
-	let num_of_triangle_corner = polygon.points.len().checked_sub(2).unwrap_or_else(|| {
-		panic!(
-			"Attempt to subtract with overflow. Number of polygon points: {}",
-			polygon.points.len()
-		)
-	}) * 3;
-
-	let mut triangle_list = vec![0; num_of_triangle_corner];
-
-	let number_of_triangles = polygon.triangulate(&mut triangle_list);
-
-	for i in 0..number_of_triangles {
-		let a = &polygon.points[triangle_list[(i * 3) as usize] as usize];
-		let b = &polygon.points[triangle_list[(i * 3 + 1) as usize] as usize];
-		let c = &polygon.points[triangle_list[(i * 3 + 2) as usize] as usize];
-		if is_point_in_triangle(a.x, a.y, b.x, b.y, c.x, c.y, point.x, point.y) {
-			return true;
-		}
-	}
-
-	false
-}
+// pub fn is_point_in_polygon(point: &Point, polygon: &Polygon) -> Result<bool, String> {
+// 	if polygon.points.len() < 3 {
+// 		return Err(String::from("Less than 3 vertices"));
+// 	}
+//
+// 	let tri = polygon.triangulate();
+// 	Ok(tri.is_point_inside(&[point.x, point.y]))
+// }
 
 /// signed area of a triangle
 pub fn area(p1: &Point, p2: &Point, p3: &Point) -> f64 {
