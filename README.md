@@ -1,4 +1,7 @@
-# EvacuationC
+# Evacuation
+
+![test workflow](https://github.com/NikBel3476/evacuation/actions/workflows/test.yml/badge.svg)
+[![codecov](https://codecov.io/gh/NikBel3476/evacuation/branch/master/graph/badge.svg?token=ZPETC3A6Y5)](https://codecov.io/gh/NikBel3476/evacuation)
 
 **EvacuationC** -- программа моделирования движения людей в здании. 
 
