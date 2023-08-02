@@ -52,10 +52,12 @@ export default defineConfig({
 			...configDefaults.exclude,
 			'coverage/**',
 			'coverageUi/**',
+			'**/target/**',
+			'.storybook/**',
+			'stories/**',
 			'**/{tailwind,postcss,eslint}.config.*',
 			'**/.{eslint,mocha,prettier}rc.{js,cjs,yml}',
 			'wdio.conf.ts',
-			'**/target/**',
 			'**/PeopleTrafficPage.test.tsx',
 			'**/ModelingViewPage.test.tsx'
 		],
@@ -67,9 +69,11 @@ export default defineConfig({
 			exclude: [
 				...configDefaults.coverage.exclude,
 				'coverageUi/**',
+				'**/target/**',
+				'.storybook/**',
+				'stories/**',
 				'**/{tailwind,postcss,eslint}.config.*',
-				'wdio.conf.ts',
-				'**/target/**'
+				'wdio.conf.ts'
 			]
 		}
 	}
