@@ -1,4 +1,4 @@
 export enum TransitionType {
-	FromBim,
-	Users
+	FromBim = 'fromBim',
+	Users = 'users'
 }

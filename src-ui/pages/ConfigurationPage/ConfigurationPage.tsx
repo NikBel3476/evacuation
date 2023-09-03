@@ -1,12 +1,22 @@
-import React, { ChangeEventHandler, FC, useEffect } from 'react';
+import React, {
+	ChangeEventHandler,
+	FC,
+	MouseEventHandler,
+	useEffect,
+	useState
+} from 'react';
 import { Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { getConfig } from '../../store/actionCreators/getConfig';
 import { changeLoggerFile } from '../../store/slices/ConfigSlice';
 import Select from '../../components/Select';
+import { invoke } from '@tauri-apps/api';
+import cn from 'classnames';
 
 const ConfigurationPage: FC = () => {
 	const dispatch = useAppDispatch();
+	const [isConfigSaving, setIsConfigSaving] = useState<boolean>(false);
+	const [configSavingError, setConfigSavingError] = useState<string>('');
 	const { config, isLoading, error } = useAppSelector(state => state.configReducer);
 
 	useEffect(() => {
@@ -17,36 +27,63 @@ const ConfigurationPage: FC = () => {
 		dispatch(changeLoggerFile(e.target.value));
 	};
 
+	const handleSaveConfigButtonClick: MouseEventHandler<HTMLButtonElement> = async _ => {
+		if (config !== null) {
+			try {
+				setConfigSavingError('');
+				setIsConfigSaving(true);
+				await invoke('save_configuration', { configuration: config });
+			} catch (e) {
+				setConfigSavingError(
+					typeof e === 'string' ? e : 'Ошибка сохранения конфигурации'
+				);
+			} finally {
+				setIsConfigSaving(false);
+			}
+		}
+	};
+
 	return (
 		<main className="pb-5">
 			<h1 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
 				Configuration page
 			</h1>
-			<Link
-				className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 ml-5 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-				to="/"
-			>
-				Main page
-			</Link>
-			<button className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 ml-5 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-				Save
-			</button>
+			<div className="mt-4 mx-5">
+				<Link
+					className="w-28 inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+					to="/"
+				>
+					Main page
+				</Link>
+				<button
+					className={cn(
+						'w-28 inline-flex justify-center rounded-md border border-transparent bg-indigo-600 ml-5 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-300'
+					)}
+					onClick={handleSaveConfigButtonClick}
+					disabled={isConfigSaving}
+				>
+					{isConfigSaving ? 'Saving...' : 'Save'}
+				</button>
+				{Boolean(configSavingError) && (
+					<p className="mt-2 text-red-600">{configSavingError}</p>
+				)}
+			</div>
 			{isLoading && <h3>Configuration is loading...</h3>}
-			{error && <h3>{error}</h3>}
+			{Boolean(error) && <h3>{error}</h3>}
 			{config !== null && (
 				<div className="ml-5">
 					<section className="mt-5">
 						<label htmlFor="bim_filenames" className="text-2xl">
 							Файлы цифровых моделей зданий
 						</label>
-						<Select options={config.files} />
+						<Select options={config.bimFiles.map(file => ({ key: file, value: file }))} />
 					</section>
 					<section className="mt-5">
 						<label htmlFor="logger_filename" className="text-2xl">
 							Файл конфигурации логирования
 						</label>
 						<input
-							value={config.logger_config}
+							value={config.loggerCfg}
 							onChange={handleLoggerFilenameInputChange}
 							type="text"
 							name="logger_filename"
@@ -60,7 +97,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="distribution_type">Тип:</label>
 							<input
-								value={config.distribution.distribution_type}
+								value={config.distribution.type}
 								onChange={() => {}}
 								placeholder="distribution_type"
 								type="text"
@@ -142,7 +179,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="transition_type">Тип:</label>
 							<input
-								value={config.transition.transitions_type}
+								value={config.transitionParameters.type}
 								onChange={() => {}}
 								placeholder="transition_type"
 								type="text"
@@ -155,7 +192,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="transition_doorway_in">Doorway in:</label>
 							<input
-								value={config.transition.doorway_in}
+								value={config.transitionParameters.doorwayIn}
 								onChange={() => {}}
 								placeholder="transition_doorway_in"
 								type="text"
@@ -168,7 +205,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="transition_doorway_out">Doorway out:</label>
 							<input
-								value={config.transition.doorway_out}
+								value={config.transitionParameters.doorwayOut}
 								onChange={() => {}}
 								placeholder="transition_doorway_out"
 								type="text"
@@ -180,7 +217,7 @@ const ConfigurationPage: FC = () => {
 						</div>
 						<div className="mt-2">
 							<ul className="ml-4 list-decimal list-outside">
-								{config.transition.special.map(special => (
+								{config.transitionParameters.special.map(special => (
 									<li key={special.uuid.toString()}>
 										<div>
 											<label
@@ -236,7 +273,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="modeling_step">Шаг:</label>
 							<input
-								value={config.modeling.step}
+								value={config.modelingParameters.step}
 								onChange={() => {}}
 								placeholder="modeling_step"
 								type="text"
@@ -249,7 +286,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="max_speed">Максимальная скорость:</label>
 							<input
-								value={config.modeling.max_speed}
+								value={config.modelingParameters.maxSpeed}
 								onChange={() => {}}
 								placeholder="max_speed"
 								type="text"
@@ -262,7 +299,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="max_density">Максимальная плотность:</label>
 							<input
-								value={config.modeling.max_density}
+								value={config.modelingParameters.maxDensity}
 								onChange={() => {}}
 								placeholder="max_density"
 								type="text"
@@ -275,7 +312,7 @@ const ConfigurationPage: FC = () => {
 						<div className="mt-2">
 							<label htmlFor="min_density">Минимальная плотность:</label>
 							<input
-								value={config.modeling.min_density}
+								value={config.modelingParameters.minDensity}
 								onChange={() => {}}
 								placeholder="min_density"
 								type="text"

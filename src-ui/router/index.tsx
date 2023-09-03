@@ -2,8 +2,9 @@ import React from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import MainPage from '../pages/MainPage';
 import ConfigurationPage from '../pages/ConfigurationPage';
-import PeopleTraffic from '../pages/PeopleTraffic';
+import PeopleTrafficPage from '../pages/PeopleTrafficPage';
 import ModelingViewPage from '../pages/ModelingViewPage';
+import ModelingPage from '../pages/ModelingPage';
 
 export const router = createBrowserRouter([
 	{
@@ -16,7 +17,11 @@ export const router = createBrowserRouter([
 	},
 	{
 		path: '/peopleTraffic',
-		element: <PeopleTraffic />
+		element: <PeopleTrafficPage />
+	},
+	{
+		path: '/modeling',
+		element: <ModelingPage />
 	},
 	{
 		path: '/modelingView',

@@ -3,8 +3,9 @@
 	windows_subsystem = "windows"
 )]
 
+use crate::bim::bim_tools::EvacuationModelingResult;
 use bim::configuration;
-use bim::run_rust;
+use bim::{run_evacuation_modeling, run_rust};
 use python::call_python::run_python;
 use tauri::{AppHandle, WindowBuilder};
 
@@ -15,12 +16,14 @@ fn main() {
 	tauri::Builder::default()
 		.invoke_handler(tauri::generate_handler![
 			read_config,
+			save_configuration,
 			open_configuration_window,
 			open_configuration_rescript_window,
 			open_people_traffic_window,
 			open_building_view_window,
 			bim_start,
-			python_start
+			python_start,
+			run_modeling
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
@@ -32,7 +35,22 @@ fn read_config() -> Result<configuration::ScenarioCfg, String> {
 }
 
 #[tauri::command]
-fn open_configuration_window(handle: AppHandle) {
+fn save_configuration(
+	handle: AppHandle,
+	configuration: configuration::ScenarioCfg,
+) -> Result<String, String> {
+	if let Some(dir) = handle.path_resolver().app_data_dir() {
+		let app_data_dir_path = dir.join("configuration.json");
+		return match configuration::save_configuration(&app_data_dir_path, &configuration) {
+			Ok(_) => Ok(String::from(app_data_dir_path.to_str().unwrap_or(""))),
+			Err(error) => Err(format!("{error}")),
+		};
+	}
+	Err(String::from("Failed to get AppData directory"))
+}
+
+#[tauri::command]
+async fn open_configuration_window(handle: AppHandle) {
 	let _configuration_window = WindowBuilder::new(
 		&handle,
 		"configuration",
@@ -44,7 +62,7 @@ fn open_configuration_window(handle: AppHandle) {
 }
 
 #[tauri::command]
-fn open_configuration_rescript_window(handle: AppHandle) {
+async fn open_configuration_rescript_window(handle: AppHandle) {
 	let _configuration_window = WindowBuilder::new(
 		&handle,
 		"configurationRescript",
@@ -56,7 +74,7 @@ fn open_configuration_rescript_window(handle: AppHandle) {
 }
 
 #[tauri::command]
-fn open_people_traffic_window(handle: AppHandle) {
+async fn open_people_traffic_window(handle: AppHandle) {
 	let _people_traffic_window = WindowBuilder::new(
 		&handle,
 		"people_traffic",
@@ -69,7 +87,7 @@ fn open_people_traffic_window(handle: AppHandle) {
 }
 
 #[tauri::command]
-fn open_building_view_window(handle: AppHandle) {
+async fn open_building_view_window(handle: AppHandle) {
 	let _building_view_window = WindowBuilder::new(
 		&handle,
 		"building_view",
@@ -84,6 +102,11 @@ fn open_building_view_window(handle: AppHandle) {
 #[tauri::command]
 fn bim_start() {
 	run_rust();
+}
+
+#[tauri::command]
+fn run_modeling(file_path: &str) -> EvacuationModelingResult {
+	run_evacuation_modeling(file_path)
 }
 
 #[tauri::command]

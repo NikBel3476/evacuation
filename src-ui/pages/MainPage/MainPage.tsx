@@ -23,15 +23,11 @@ const MainPage: FC = () => {
 	};
 
 	const handleBimStartButtonClick = () => {
-		void invoke('bim_start').then(() => {
-			console.log('completed');
-		});
+		void invoke('bim_start');
 	};
 
 	const handleRunPythonButtonClick = () => {
-		void invoke('python_start').then(() => {
-			console.log('python started');
-		});
+		void invoke('python_start');
 	};
 
 	return (
@@ -71,7 +67,10 @@ const MainPage: FC = () => {
 							</Button>
 						</li>
 						<li>
-							<Button onClick={handleBimStartButtonClick}>Запустить симуляцию</Button>
+							<Button onClick={handleBimStartButtonClick}>Запустить моделирование</Button>
+						</li>
+						<li>
+							<RouterLink to="modeling">Страница моделирования</RouterLink>
 						</li>
 						<li>
 							<RouterLink to="modelingView">

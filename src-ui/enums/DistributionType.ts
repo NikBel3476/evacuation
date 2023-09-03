@@ -1,4 +1,4 @@
 export enum DistributionType {
-	FromBim,
-	Users
+	FromBim = 'fromBim',
+	Users = 'users'
 }

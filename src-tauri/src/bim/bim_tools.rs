@@ -1,8 +1,18 @@
 use super::bim_json_object::{BimElementSign, BimJsonObject};
 use super::bim_polygon_tools::{is_intersect_line, Line, Polygon};
 use super::json_object::Point;
+use crate::bim::bim_evac::{
+	evac_def_modeling_step, evac_moving_step_test_with_log_rust, get_time_m, get_time_s, time_inc,
+	time_reset,
+};
+use crate::bim::bim_graph::bim_graph_new;
+use serde::Serialize;
 use std::cmp::Ordering;
 use uuid::{uuid, Uuid};
+
+const EVACUATION_MODELING_STEP: f64 = 0.01;
+const EVACUATION_MODELING_MAX_SPEED: f64 = 100.0;
+const EVACUATION_TIME: f64 = 0.0;
 
 /// Структура, расширяющая элемент DOOR_*
 #[derive(Debug, Clone, Default)]
@@ -90,6 +100,26 @@ pub struct Bim {
 	pub zones: Vec<BimZone>,
 	/// Список переходов объекта
 	pub transits: Vec<BimTransit>,
+	/// мин
+	pub evacuation_modeling_step: f64,
+	/// м/мин
+	pub evacuation_modeling_max_speed: f64,
+	pub evacuation_time_in_minutes: f64,
+}
+
+#[derive(Serialize)]
+pub struct EvacuationModelingResult {
+	pub number_of_people_inside_building: f64,
+	pub number_of_evacuated_people: f64,
+	pub time_in_seconds: f64,
+	#[serde(skip)]
+	pub people_distribution_stats: Vec<DistributionState>,
+}
+
+#[derive(Serialize)]
+pub struct DistributionState {
+	pub time_in_minutes: f64,
+	pub distribution: Vec<f64>,
 }
 
 impl Bim {
@@ -108,6 +138,85 @@ impl Bim {
 			BimElementSign::Outside => acc,
 			_ => acc + zone.number_of_people,
 		})
+	}
+
+	pub fn run_modeling(&mut self) -> EvacuationModelingResult {
+		let graph = bim_graph_new(self);
+
+		self.define_modeling_step();
+		self.reset_time();
+
+		let remainder = 0.0; // Количество человек, которое может остаться в зд. для остановки цикла
+		let mut people_distribution_stats: Vec<DistributionState> =
+			vec![self.distributions_statistics()];
+		loop {
+			evac_moving_step_test_with_log_rust(&graph, &mut self.zones, &mut self.transits);
+			self.increment_time();
+			// bim_output_body(&bim, get_time_m(), &mut fp_detail);
+			people_distribution_stats.push(self.distributions_statistics());
+
+			if self.number_of_people_in_building() <= remainder {
+				break;
+			}
+		}
+
+		EvacuationModelingResult {
+			number_of_people_inside_building: self.number_of_people(),
+			number_of_evacuated_people: self.zones[self.zones.len() - 1].number_of_people,
+			time_in_seconds: self.get_time_s(),
+			people_distribution_stats,
+		}
+	}
+
+	fn distributions_statistics(&self) -> DistributionState {
+		let mut distribution_stats = vec![];
+		for zone in &self.zones {
+			distribution_stats.push(zone.number_of_people);
+		}
+		for transition in &self.transits {
+			distribution_stats.push(transition.no_proceeding);
+		}
+
+		DistributionState {
+			time_in_minutes: self.evacuation_time_in_minutes,
+			distribution: distribution_stats,
+		}
+	}
+
+	fn number_of_people_in_building(&self) -> f64 {
+		let mut num_of_people = 0.0;
+		for zone in &self.zones {
+			if zone.is_visited {
+				num_of_people += zone.number_of_people;
+			}
+		}
+		num_of_people
+	}
+
+	fn define_modeling_step(&mut self) {
+		let average_size = self.area() / self.zones.len() as f64;
+		let hxy = average_size.sqrt();
+
+		self.evacuation_modeling_step = match self.evacuation_modeling_step.total_cmp(&0.0) {
+			Ordering::Equal => hxy / self.evacuation_modeling_max_speed * 0.1,
+			_ => self.evacuation_modeling_step,
+		}
+	}
+
+	fn reset_time(&mut self) {
+		self.evacuation_time_in_minutes = 0.0;
+	}
+
+	fn get_time_s(&self) -> f64 {
+		self.evacuation_time_in_minutes * 60.0
+	}
+
+	fn get_time_m(&self) -> f64 {
+		self.evacuation_time_in_minutes
+	}
+
+	fn increment_time(&mut self) {
+		self.evacuation_time_in_minutes += self.evacuation_modeling_step;
 	}
 }
 
@@ -495,5 +604,8 @@ pub fn bim_tools_new_rust(bim_json: &BimJsonObject) -> Bim {
 		zones: zones_list,
 		levels: levels_list,
 		name: bim_json.building_name.clone(),
+		evacuation_modeling_step: EVACUATION_MODELING_STEP,
+		evacuation_modeling_max_speed: EVACUATION_MODELING_MAX_SPEED,
+		evacuation_time_in_minutes: EVACUATION_TIME,
 	}
 }
