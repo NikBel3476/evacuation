@@ -47,11 +47,29 @@ export default defineConfig({
 		globals: true,
 		environment: 'jsdom',
 		setupFiles: 'src-ui/setupTests.ts',
+		exclude: [
+			'coverage/**',
+			'coverageUi/**',
+			'**/node_modules/**',
+			'**/dist/**',
+			'**/.{idea,git,cache,output,temp}/**',
+			'cypress/**',
+			'**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tailwind,postcss,eslint}.config.*',
+			'**/.{eslint,mocha,prettier}rc.{js,cjs,yml}',
+			'wdio.conf.ts',
+			'**/target/**'
+		],
 		coverage: {
 			all: true,
+			provider: 'v8',
+			reporter: ['lcov'],
+			reportsDirectory: 'coverageUi',
 			exclude: [
 				'coverage/**',
-				'dist/**',
+				'coverageUi/**',
+				'**/node_modules/**',
+				'**/dist/**',
+				'**/.{idea,git,cache,output,temp}/**',
 				'packages/*/test{,s}/**',
 				'**/*.d.ts',
 				'cypress/**',
@@ -60,11 +78,9 @@ export default defineConfig({
 				'**/*{.,-}test.{js,cjs,mjs,ts,tsx,jsx}',
 				'**/*{.,-}spec.{js,cjs,mjs,ts,tsx,jsx}',
 				'**/__tests__/**',
-				'**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress}.config.*',
+				'**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tailwind,postcss,eslint}.config.*',
 				'**/.{eslint,mocha,prettier}rc.{js,cjs,yml}',
-				'vite.config.ts',
-				'tailwind.config.cjs',
-				'postcss.config.cjs',
+				'wdio.conf.ts',
 				'**/target/**'
 			]
 		}
