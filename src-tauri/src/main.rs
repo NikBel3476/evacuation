@@ -3,14 +3,12 @@
 	windows_subsystem = "windows"
 )]
 
-use crate::bim::bim_tools::EvacuationModelingResult;
-use crate::bim::configuration::ScenarioCfg;
-use bim::configuration;
-use bim::{run_evacuation_modeling, run_rust};
+use evacuation_core::bim::bim_tools::EvacuationModelingResult;
+use evacuation_core::bim::configuration::{self, ScenarioCfg};
+use evacuation_core::bim::{run_evacuation_modeling, run_rust};
 use python::call_python::run_python;
 use tauri::{AppHandle, WindowBuilder};
 
-mod bim;
 mod python;
 
 fn main() {
