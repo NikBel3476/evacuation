@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import type { ScenarioConfiguration } from '../types/ScenarioConfiguration';
 import type { EvacuationModelingResult } from '../types/ModelingResult';
 

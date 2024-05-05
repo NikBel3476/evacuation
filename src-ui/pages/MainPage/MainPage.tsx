@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 
 import styles from './MainPage.module.css';
 import RouterLink from '../../components/RouterLink';

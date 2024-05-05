@@ -17,10 +17,10 @@ import {
 	setPeopleOutsideBuilding
 } from '../../store/slices/BuildingViewSlice';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
-import type { FileEntry } from '@tauri-apps/api/fs';
-import { readDir, BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
+import type { DirEntry } from '@tauri-apps/plugin-fs';
+import { readDir, BaseDirectory, readTextFile } from '@tauri-apps/plugin-fs';
 import { Building } from '../../BuildingView2D/application/Interfaces/Building';
-import { open } from '@tauri-apps/api/dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import { runEvacuationModeling } from '../../rustCalls';
 
 let app: App | null = null;
@@ -28,7 +28,7 @@ let app: App | null = null;
 const PeopleTrafficPage = () => {
 	const dispatch = useAppDispatch();
 	const { config } = useAppSelector(state => state.configReducer);
-	const [bimFileEntries, setBimFileEntries] = useState<FileEntry[]>([]);
+	const [bimFileEntries, setBimFileEntries] = useState<DirEntry[]>([]);
 	const [bimFileIsLoading, setBimFileIsLoading] = useState<boolean>(true);
 
 	const onModelingTick = (numberOfPeople: number, numberOfEvacuatedPeople: number) => {
@@ -40,9 +40,9 @@ const PeopleTrafficPage = () => {
 	};
 
 	const onBuildingViewMount = useCallback(async () => {
-		const files = await readDir('resources', { dir: BaseDirectory.AppData });
-		setBimFileEntries(files.filter(fileEntry => fileEntry.path.endsWith('.json')));
-		const bimFile = files[2].path;
+		const files = await readDir('resources', { baseDir: BaseDirectory.AppData });
+		setBimFileEntries(files.filter(dirEntry => dirEntry.isFile && dirEntry.name.endsWith('.json')));
+		const bimFile = files[2].name;
 		const buildingData = await readTextFile(bimFile);
 		const modelingResult = await runEvacuationModeling(bimFile, config);
 		app = new App(
@@ -98,9 +98,9 @@ const PeopleTrafficPage = () => {
 	const handleSelectFileChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
 		// const buildingData = bimFiles[`../res/${e.target.value}`];
 		setBimFileIsLoading(true);
-		const fileEntry = bimFileEntries.find(fileEntry => fileEntry.name === e.target.value);
+		const dirEntry = bimFileEntries.find(fileEntry => fileEntry.name === e.target.value);
 		const buildingData = JSON.parse(
-			await readTextFile(fileEntry?.path ?? '')
+			await readTextFile(dirEntry?.name ?? '')
 		) as Building;
 		if (app && Boolean(buildingData)) {
 			// FIXME: handle state when timeData is undefined

@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { getConfig } from '../../store/actionCreators/getConfig';
 import { changeLoggerFile } from '../../store/slices/ConfigSlice';
 import Select from '../../components/Select';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import cn from 'classnames';
 
 const ConfigurationPage: FC = () => {

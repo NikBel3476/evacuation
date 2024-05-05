@@ -83,14 +83,14 @@ export const buildingViewSlice = createSlice({
 		setScale: (state, action: PayloadAction<number>) => {
 			state.scale = action.payload;
 		},
-		incrementScale: state => {
-			state.scale += 0.1;
+		increaseScale: state => {
+			state.scale *= 1.25;
 		},
 		incrementScaleBy: (state, action: PayloadAction<number>) => {
 			state.scale += action.payload;
 		},
-		decrementScale: state => {
-			state.scale -= 0.1;
+		decreaseScale: state => {
+			state.scale /= 1.25;
 		},
 		decrementScaleBy: (state, action: PayloadAction<number>) => {
 			state.scale -= action.payload;
@@ -143,9 +143,9 @@ export const {
 	decrementCurrentLevel,
 	setCurrentLevel,
 	setScale,
-	incrementScale,
+	increaseScale,
 	incrementScaleBy,
-	decrementScale,
+	decreaseScale,
 	decrementScaleBy,
 	setEvacuationTimeInSec,
 	incrementEvacuationTimeStep,

@@ -7,10 +7,10 @@ import { Point as PixiPoint } from 'pixi.js';
 import { Logic } from '../../BuildingView2D/application/logic/Logic';
 import {
 	decrementCurrentLevel,
-	decrementScale,
+	decreaseScale,
 	incrementCurrentLevel,
 	incrementModelingStep,
-	incrementScale,
+	increaseScale,
 	setAnchorCoordinates,
 	setBim,
 	setBuildingElement,
@@ -31,8 +31,8 @@ import FloorInfo from '../../components/modeling/FloorInfo';
 import ControlPanel from '../../components/modeling/ControlPanel';
 import { getConfig } from '../../store/actionCreators/getConfig';
 import type { BimJson } from '../../interfaces/BimJson';
-import { open } from '@tauri-apps/api/dialog';
-import { readTextFile } from '@tauri-apps/api/fs';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import { runEvacuationModeling } from '../../rustCalls';
 import type { BuildElementJson } from '../../interfaces/BuildElementJson';
 import { Mathem } from '../../BuildingView2D/application/mathem/Mathem';
@@ -51,6 +51,7 @@ const ModelingViewPage = () => {
 	} = useAppSelector(state => state.buildingViewReducer);
 	const [buildingDataIsLoading, setBuildingDataIsLoading] = useState<boolean>(false);
 	const [canMove, setCanMove] = useState<boolean>(false);
+	const [mousePoint, setMousePoint] = useState<{x: number, y: number} | null>(null);
 
 	useEffect(() => {
 		if (!bim) {
@@ -65,18 +66,19 @@ const ModelingViewPage = () => {
 	}, []);
 
 	const openFileDialog = async () => {
-		const filePaths = await open({
+		const file = await open({
 			directory: false,
 			multiple: false,
 			title: 'Open BIM file',
 			filters: [{ name: 'BIM json', extensions: ['json'] }]
 		});
 		setBuildingDataIsLoading(true);
-		const filePath = filePaths instanceof Array ? filePaths[0] : filePaths;
-		if (filePath !== null) {
-			const buildingData = JSON.parse(await readTextFile(filePath)) as BimJson;
+		if (file !== null) {
+			const buildingData = JSON.parse(await readTextFile(file.path)) as BimJson;
 			try {
-				const modelingResult = await runEvacuationModeling(filePath, config);
+				const modelingResult = await runEvacuationModeling(file.path, config);
+				dispatch(setScale(1));
+				dispatch(setAnchorCoordinates(new PixiPoint()));
 				dispatch(setModelingStep(0));
 				dispatch(setBim(buildingData));
 				dispatch(setTimeData(modelingResult.distribution_by_time_steps));
@@ -140,10 +142,10 @@ const ModelingViewPage = () => {
 	const handleCanvasWheel: WheelEventHandler<HTMLCanvasElement> = event => {
 		switch (Math.sign(event.deltaY)) {
 			case -1:
-				dispatch(incrementScale());
+				dispatch(increaseScale());
 				break;
 			case +1:
-				dispatch(decrementScale());
+				dispatch(decreaseScale());
 				break;
 		}
 	};
@@ -164,16 +166,18 @@ const ModelingViewPage = () => {
 	};
 
 	const handleCanvasMouseMove: MouseEventHandler<HTMLCanvasElement> = event => {
-		if (canMove) {
+		const currentMousePoint = { x: event.screenX, y: event.screenY };
+		if (canMove && mousePoint != null) {
 			dispatch(
 				setAnchorCoordinates(
 					new PixiPoint(
-						anchorCoordinates.x + event.movementX,
-						anchorCoordinates.y + event.movementY
+						anchorCoordinates.x + (currentMousePoint.x - mousePoint.x),
+						anchorCoordinates.y + (currentMousePoint.y - mousePoint.y)
 					)
 				)
 			);
 		}
+		setMousePoint(currentMousePoint);
 	};
 
 	const handleWindowKeydown = (event: KeyboardEvent) => {
@@ -193,11 +197,11 @@ const ModelingViewPage = () => {
 				break;
 			case '=':
 			case '+':
-				dispatch(incrementScale());
+				dispatch(increaseScale());
 				break;
 			case '-':
 			case '_':
-				dispatch(decrementScale());
+				dispatch(decreaseScale());
 				break;
 		}
 	};

@@ -4,7 +4,7 @@ import Select from '../../components/Select';
 import { runEvacuationModeling } from '../../rustCalls';
 import { EvacuationModelingResult } from '../../types/ModelingResult';
 import ModelingResultWidget from '../../components/ModelingResultWidget';
-import { BaseDirectory, FileEntry, readDir } from '@tauri-apps/api/fs';
+import { BaseDirectory, DirEntry, readDir } from '@tauri-apps/plugin-fs';
 import { listen, TauriEvent, UnlistenFn } from '@tauri-apps/api/event';
 import cn from 'classnames';
 import styles from './ModelingPage.module.css';
@@ -12,7 +12,7 @@ import { useAppSelector } from '../../hooks/redux';
 
 const ModelingPage = () => {
 	const { config } = useAppSelector(state => state.configReducer);
-	const [bimFiles, setBimFiles] = useState<FileEntry[]>([]);
+	const [bimFiles, setBimFiles] = useState<DirEntry[]>([]);
 	const [selectedFilePath, setSelectedFilePath] = useState<string>('');
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const [isFileDropHover, setIsFileDropHover] = useState<boolean>(false);
@@ -26,14 +26,14 @@ const ModelingPage = () => {
 
 		void (async () => {
 			unlistenWindowFileDrop = await listen<string>(
-				TauriEvent.WINDOW_FILE_DROP,
+				TauriEvent.DROP,
 				event => {
 					console.log(event);
 				}
 			);
 
 			unlistenWindowFileDropHover = await listen<string>(
-				TauriEvent.WINDOW_FILE_DROP_HOVER,
+				TauriEvent.DROP_OVER,
 				event => {
 					setIsFileDropHover(true);
 					console.log(event);
@@ -41,7 +41,7 @@ const ModelingPage = () => {
 			);
 
 			unlistenWindowFileDropCancelled = await listen<string>(
-				TauriEvent.WINDOW_FILE_DROP_CANCELLED,
+				TauriEvent.DROP_CANCELLED,
 				event => {
 					setIsFileDropHover(false);
 					console.log(event);
@@ -64,10 +64,10 @@ const ModelingPage = () => {
 	}, []);
 
 	const loadFiles = async () => {
-		const files = await readDir('resources', { dir: BaseDirectory.AppData });
+		const files = await readDir('resources', { baseDir: BaseDirectory.AppData });
 		setBimFiles(files);
 		if (files.length > 0) {
-			setSelectedFilePath(files[0].path);
+			setSelectedFilePath(files[0].name);
 		}
 	};
 
@@ -102,7 +102,7 @@ const ModelingPage = () => {
 						className="text-black mt-4"
 						options={bimFiles.map(file => ({
 							key: file.name ?? 'Undefined name',
-							value: file.path
+							value: file.name
 						}))}
 						onChange={handleSelectFileChange}
 					/>
