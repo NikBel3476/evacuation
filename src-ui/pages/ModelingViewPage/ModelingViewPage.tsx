@@ -74,9 +74,9 @@ const ModelingViewPage = () => {
 		});
 		setBuildingDataIsLoading(true);
 		if (file !== null) {
-			const buildingData = JSON.parse(await readTextFile(file.path)) as BimJson;
+			const buildingData = JSON.parse(await readTextFile(file)) as BimJson;
 			try {
-				const modelingResult = await runEvacuationModeling(file.path, config);
+				const modelingResult = await runEvacuationModeling(file, config);
 				dispatch(setScale(1));
 				dispatch(setAnchorCoordinates(new PixiPoint()));
 				dispatch(setModelingStep(0));

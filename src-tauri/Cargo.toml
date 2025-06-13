@@ -21,8 +21,8 @@ serde_json = "1.0.139"
 tauri = { version = "2.3.1", features = [] }
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-fs = "2.2.0"
-pyo3 = { version = "0.23.5", features = ["auto-initialize"] }
-evacuation-core = { git = "https://github.com/NikBel3476/evacuation-core.git", rev = "8db3c3d" }
+pyo3 = { version = "0.25.1", features = ["auto-initialize"] }
+evacuation-core = { git = "https://github.com/NikBel3476/evacuation-core.git", rev = "85e556e" }
 
 [dev-dependencies]
 insta = { version = "1.42.1", features = ["yaml"] }
