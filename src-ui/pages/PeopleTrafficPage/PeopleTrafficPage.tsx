@@ -41,7 +41,9 @@ const PeopleTrafficPage = () => {
 
 	const onBuildingViewMount = useCallback(async () => {
 		const files = await readDir('resources', { baseDir: BaseDirectory.AppData });
-		setBimFileEntries(files.filter(dirEntry => dirEntry.isFile && dirEntry.name.endsWith('.json')));
+		setBimFileEntries(
+			files.filter(dirEntry => dirEntry.isFile && dirEntry.name.endsWith('.json'))
+		);
 		const bimFile = files[2].name;
 		const buildingData = await readTextFile(bimFile);
 		const modelingResult = await runEvacuationModeling(bimFile, config);
@@ -99,9 +101,7 @@ const PeopleTrafficPage = () => {
 		// const buildingData = bimFiles[`../res/${e.target.value}`];
 		setBimFileIsLoading(true);
 		const dirEntry = bimFileEntries.find(fileEntry => fileEntry.name === e.target.value);
-		const buildingData = JSON.parse(
-			await readTextFile(dirEntry?.name ?? '')
-		) as Building;
+		const buildingData = JSON.parse(await readTextFile(dirEntry?.name ?? '')) as Building;
 		if (app && Boolean(buildingData)) {
 			// FIXME: handle state when timeData is undefined
 			// const timeData = timeDataFiles[`../res/${e.target.value}`];

@@ -25,20 +25,14 @@ const ModelingPage = () => {
 		let unlistenWindowFileDropCancelled: UnlistenFn | null = null;
 
 		void (async () => {
-			unlistenWindowFileDrop = await listen<string>(
-				TauriEvent.DROP,
-				event => {
-					console.log(event);
-				}
-			);
+			unlistenWindowFileDrop = await listen<string>(TauriEvent.DROP, event => {
+				console.log(event);
+			});
 
-			unlistenWindowFileDropHover = await listen<string>(
-				TauriEvent.DROP_OVER,
-				event => {
-					setIsFileDropHover(true);
-					console.log(event);
-				}
-			);
+			unlistenWindowFileDropHover = await listen<string>(TauriEvent.DROP_OVER, event => {
+				setIsFileDropHover(true);
+				console.log(event);
+			});
 
 			unlistenWindowFileDropCancelled = await listen<string>(
 				TauriEvent.DROP_CANCELLED,

@@ -51,7 +51,7 @@ const ModelingViewPage = () => {
 	} = useAppSelector(state => state.buildingViewReducer);
 	const [buildingDataIsLoading, setBuildingDataIsLoading] = useState<boolean>(false);
 	const [canMove, setCanMove] = useState<boolean>(false);
-	const [mousePoint, setMousePoint] = useState<{x: number, y: number} | null>(null);
+	const [mousePoint, setMousePoint] = useState<{ x: number; y: number } | null>(null);
 
 	useEffect(() => {
 		if (!bim) {
