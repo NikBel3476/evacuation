@@ -4,9 +4,16 @@ import { UI } from './ui/UI.js';
 import { Mathem } from './mathem/Mathem.js';
 import { Logic } from './logic/Logic.js';
 import { Canvas } from './canvas/Canvas.js';
-import { BuildingElement, Point } from './Interfaces/Building';
+import type { BuildingElement, Point, Building } from './Interfaces/Building';
 import { GIFEncoder } from '../../peopleTraffic/js/vendor/toGif/GIFEncoder';
 import { VideoRecorder } from '../VideoRecorder/VideoRecorder';
+import type { TimeData, TimeState } from './Interfaces/TimeData';
+
+function* timeDataIterator(timeData: TimeData): Generator<TimeState, undefined> {
+	for (const timeState of timeData.items) {
+		yield timeState;
+	}
+}
 
 export class App {
 	server: Server;
@@ -24,28 +31,34 @@ export class App {
 	ui: UI;
 	logic: Logic;
 	encoder;
-	timerTimeDataUpdatePause: boolean = true;
-	isGifStop: boolean = false;
-	canMove: boolean = false;
+	timerTimeDataUpdatePause = true;
+	isGifStop = false;
+	canMove = false;
 	private renderLoopId: number | null = null;
 	private timerTimeDataUpdateId: number | null = null;
-	private fps: number = 0;
-	private fpsOut: number = 0;
+	private fps = 0;
+	private fpsOut = 0;
 	private timestamp: number = performance.now();
+	private nextTimeState: Generator<TimeState, undefined>;
+	private currentTimeState: IteratorResult<TimeState, undefined>;
 
 	constructor(
 		public canvasId: string,
-		public canvasContainerId: string
+		public canvasContainerId: string,
+		buildingData: Building,
+		timeData: TimeData,
+		onModelingTick?: (numberOfPeople: number, numberOfEvacuatedPeople: number) => void
 	) {
 		// Инициализация настроек, сервера, инструментария канвас и модуля отрисовки
-		this.server = new Server();
+		this.server = new Server(buildingData);
 		this.canvas = new Canvas({ canvasId, canvasContainerId });
 		this.mathem = new Mathem();
 		this.videoRecorder = new VideoRecorder(this.canvas.canvas);
+		this.nextTimeState = timeDataIterator(timeData);
+		this.currentTimeState = this.nextTimeState.next();
 		this.data = {
 			cameraXY: { x: 0, y: 0 },
 			scale: 20,
-
 			activeBuilds: []
 		};
 		this.view = new View({
@@ -62,9 +75,12 @@ export class App {
 			ui: this.ui,
 			data: this.data,
 			mathem: this.mathem,
-			server: this.server
+			server: this.server,
+			timeData,
+			onModelingTick,
+			currentTimeState: this.currentTimeState.value
 		});
-		// @ts-expect-error written in js
+		// @ts-expect-error any type
 		this.encoder = new GIFEncoder();
 
 		// Инициализация первичных настроек
@@ -79,6 +95,12 @@ export class App {
 		this.logic.updateNumberOfPeopleInsideBuildingLabel();
 
 		this.gifInit(1000); // Инициализация настроек
+	}
+
+	setTimeData(timeData: TimeData) {
+		this.nextTimeState = timeDataIterator(timeData);
+		this.currentTimeState = this.nextTimeState.next();
+		this.logic.currentTimeState = this.currentTimeState.value;
 	}
 
 	startRendering() {
@@ -119,11 +141,18 @@ export class App {
 	}
 
 	updateTimeData() {
+		if (!Boolean(this.currentTimeState.done)) {
+			const nextTimeState = this.nextTimeState.next();
+			this.currentTimeState = nextTimeState;
+			this.logic.currentTimeState = nextTimeState.value;
+		}
 		if (!this.timerTimeDataUpdatePause) {
-			this.ui.evacuationTimeInSec++;
+			this.ui.evacuationTimeInSec =
+				this.currentTimeState.value?.time ?? this.ui.evacuationTimeInSec;
 			this.logic.updatePeopleInBuilds();
 			this.logic.updatePeopleInCamera();
 			this.logic.updateNumberOfPeopleInsideBuildingLabel();
+
 			this.gifNewFrame();
 		}
 

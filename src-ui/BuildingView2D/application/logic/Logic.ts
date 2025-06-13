@@ -1,11 +1,11 @@
-import React from 'react';
-import { View } from '../view/View';
-import { UI } from '../ui/UI';
+import type React from 'react';
+import type { View } from '../view/View';
+import type { UI } from '../ui/UI';
 import { Mathem } from '../mathem/Mathem';
-import { Building, BuildingElement, Level, Point } from '../Interfaces/Building';
-import { TimeData } from '../Interfaces/TimeData';
-import timeData from '../../../peopleTraffic/udsu_b1_L4_v2_190701_mv_csv.json';
-import { Server } from '../server/Server';
+import type { Building, BuildingElement, Level, Point } from '../Interfaces/Building';
+import type { RoomTimeState, TimeData, TimeState } from '../Interfaces/TimeData';
+import type { Server } from '../server/Server';
+import type { BimJson } from '../../../interfaces/BimJson';
 
 interface LogicConstructorParams {
 	view: View;
@@ -17,6 +17,9 @@ interface LogicConstructorParams {
 		scale: number;
 		activeBuilds: BuildingElement[];
 	};
+	timeData: TimeData;
+	onModelingTick?: (numberOfPeople: number, numberOfEvacuatedPeople: number) => void;
+	currentTimeState?: TimeState;
 }
 
 export class Logic {
@@ -24,15 +27,30 @@ export class Logic {
 	ui: UI;
 	data: LogicConstructorParams['data'];
 	struct: Building;
-	level: number = 0;
+	level = 0;
 	choiceBuild: BuildingElement | null = null;
 	scale: number;
 	mathem: Mathem;
-	private peopleCoordinate: Array<{ uuid: string; XY: Point[] }> = [];
+	timeData: TimeData;
+	currentTimeState?: TimeState;
+	private peopleCoordinate: { uuid: string; XY: Point[] }[] = [];
 	private readonly server: Server;
-	private readonly timeData: TimeData = timeData;
 
-	constructor({ view, ui, data, mathem, server }: LogicConstructorParams) {
+	private onModelingTick?: (
+		numberOfPeople: number,
+		numberOfEvacuatedPeople: number
+	) => void;
+
+	constructor({
+		view,
+		ui,
+		data,
+		mathem,
+		server,
+		timeData,
+		onModelingTick,
+		currentTimeState
+	}: LogicConstructorParams) {
 		this.view = view;
 		this.ui = ui;
 		this.data = data;
@@ -42,6 +60,26 @@ export class Logic {
 		this.scale = this.data.scale;
 
 		this.mathem = mathem;
+		this.timeData = timeData;
+		this.currentTimeState = currentTimeState;
+
+		this.onModelingTick = onModelingTick;
+	}
+
+	totalNumberOfPeople(): number {
+		return Math.floor(
+			this.timeData.items[0].rooms.reduce(
+				(numberOfPeople, room) => numberOfPeople + room.density,
+				0
+			)
+		);
+	}
+
+	static totalNumberOfPeople(timeData: TimeData): number {
+		return timeData.items[0].rooms.reduce(
+			(numberOfPeople, room) => numberOfPeople + room.density,
+			0
+		);
 	}
 
 	/** ЛОГИКА VIEW **/
@@ -67,13 +105,17 @@ export class Logic {
 	}
 
 	updateNumberOfPeopleInsideBuildingLabel(): void {
-		const rooms = this.timeData.items.find(
-			dateTime => this.ui.evacuationTimeInSec === Math.floor(dateTime.time)
-		)?.rooms;
+		const rooms = this.currentTimeState?.rooms;
 
 		if (rooms) {
 			const numberOfPeopleInsideBuilding = Math.floor(
-				rooms.reduce((totalDensity, room) => totalDensity + room.density, 0)
+				rooms
+					.filter(room => room.uuid !== '00000000-0000-0000-0000-000000000000')
+					.reduce((totalDensity, room) => totalDensity + room.density, 0)
+			);
+
+			const numberOfPeopleOutsideBuilding = Math.floor(
+				this.totalNumberOfPeople() - numberOfPeopleInsideBuilding
 			);
 
 			if (this.ui.numberOfPeopleInsideBuilding !== 0) {
@@ -82,6 +124,9 @@ export class Logic {
 			}
 
 			this.ui.numberOfPeopleInsideBuilding = numberOfPeopleInsideBuilding;
+
+			if (this.onModelingTick)
+				this.onModelingTick(numberOfPeopleInsideBuilding, numberOfPeopleOutsideBuilding);
 		} else {
 			this.ui.numberOfPeopleInsideBuilding = 0;
 		}
@@ -100,9 +145,7 @@ export class Logic {
 	}
 
 	updatePeopleInBuilds(): void {
-		const rooms = this.timeData.items.find(
-			dateTime => this.ui.evacuationTimeInSec === Math.floor(dateTime.time)
-		)?.rooms;
+		const rooms = this.currentTimeState?.rooms;
 
 		this.peopleCoordinate = [];
 		if (rooms) {
@@ -121,21 +164,20 @@ export class Logic {
 		}
 	}
 
-	static generatePeopleCoordinates(level: Level, timeData: TimeData['items']): Point[] {
-		const rooms = timeData.find(dateTime => Math.floor(dateTime.time) === 0)?.rooms;
-
+	static generatePeopleCoordinates(
+		level: Level,
+		roomsTimeState: RoomTimeState[]
+	): Point[] {
 		const peopleCoordinates: Point[] = [];
-		if (rooms) {
-			level.BuildElement.forEach(buildingElement =>
-				rooms.forEach(room => {
-					if (room.uuid === buildingElement.Id) {
-						peopleCoordinates.push(
-							...Logic.genPeopleCoordinate(buildingElement, room.density)
-						);
-					}
-				})
-			);
-		}
+		level.BuildElement.forEach(buildingElement =>
+			roomsTimeState.forEach(room => {
+				if (room.uuid === buildingElement.Id) {
+					peopleCoordinates.push(
+						...Logic.genPeopleCoordinate(buildingElement, room.density)
+					);
+				}
+			})
+		);
 		return peopleCoordinates;
 	}
 
@@ -163,8 +205,8 @@ export class Logic {
 		const centerXY = { x: diagonalXY.x / 2, y: diagonalXY.y / 2 };
 
 		const peopleCount = Math.floor(density);
-		const peopleXY = Array<Point>(peopleCount + 1);
-		for (let i = 0; i <= peopleCount; i++) {
+		const peopleXY = Array<Point>(peopleCount);
+		for (let i = 0; i < peopleCount; i++) {
 			let randX = this.mathem.getRandomArbitrary(
 				centerXY.x - centerXY.x / 2 + minXY.x,
 				centerXY.x + centerXY.x / 2 + minXY.x
@@ -207,8 +249,8 @@ export class Logic {
 		const centerXY = { x: diagonalXY.x / 2, y: diagonalXY.y / 2 };
 
 		const peopleCount = Math.floor(density);
-		const peopleXY = Array<Point>(peopleCount + 1);
-		for (let i = 0; i <= peopleCount; i++) {
+		const peopleXY = Array<Point>(peopleCount);
+		for (let i = 0; i < peopleCount; i++) {
 			let randX = Mathem.getRandomArbitrary(
 				centerXY.x - centerXY.x / 2 + minXY.x,
 				centerXY.x + centerXY.x / 2 + minXY.x
@@ -276,6 +318,37 @@ export class Logic {
 				const intersection = this.mathem.inPoly(mouseX, mouseY, arrayX, arrayY);
 				return Boolean(intersection & 1);
 			}) ?? null;
+	}
+
+	static findBuildingElementByCoordinates(
+		buildingData: BimJson,
+		coordinates: Point,
+		scale: number
+	): BuildingElement | null {
+		console.log(coordinates);
+		console.log(buildingData);
+		buildingData.Level.forEach(level => {
+			level.BuildElement.forEach(buildingElement => {
+				const arrayX = Array(buildingElement.XY[0].points.length - 1);
+				const arrayY = Array(buildingElement.XY[0].points.length - 1);
+				buildingElement.XY[0].points.slice(0, -1).forEach((point, i) => {
+					arrayX[i] = point.x * scale;
+					arrayY[i] = point.y * scale;
+				});
+
+				const intersection = Mathem.isInPoly(
+					coordinates.x,
+					coordinates.y,
+					arrayX,
+					arrayY
+				);
+
+				if (Boolean(intersection & 1)) {
+					return buildingElement;
+				}
+			});
+		});
+		return null;
 	}
 
 	toInitialCoordination(): void {

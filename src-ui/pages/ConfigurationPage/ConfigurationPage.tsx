@@ -1,16 +1,11 @@
-import React, {
-	ChangeEventHandler,
-	FC,
-	MouseEventHandler,
-	useEffect,
-	useState
-} from 'react';
+import type { ChangeEventHandler, FC, MouseEventHandler } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { getConfig } from '../../store/actionCreators/getConfig';
 import { changeLoggerFile } from '../../store/slices/ConfigSlice';
 import Select from '../../components/Select';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import cn from 'classnames';
 
 const ConfigurationPage: FC = () => {

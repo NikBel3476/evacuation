@@ -1,20 +1,27 @@
-import type { ChangeEvent, MouseEventHandler, WheelEventHandler } from 'react';
+import type { MouseEventHandler, WheelEventHandler } from 'react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Container, Graphics, Stage } from '@pixi/react';
 import type { Graphics as PixiGraphics } from '@pixi/graphics';
-import timeData from '../../peopleTraffic/udsu_b1_L4_v2_190701_mv_csv.json';
 import { View } from '../../BuildingView2D/application/view/View';
 import { Point as PixiPoint } from 'pixi.js';
-import type { Point } from '../../BuildingView2D/application/Interfaces/Building';
 import { Logic } from '../../BuildingView2D/application/logic/Logic';
 import {
 	decrementCurrentLevel,
-	decrementScale,
+	decreaseScale,
 	incrementCurrentLevel,
-	incrementScale,
+	incrementModelingStep,
+	increaseScale,
+	setAnchorCoordinates,
 	setBim,
+	setBuildingElement,
 	setCurrentLevel,
-	setScale
+	setEvacuationTimeInSec,
+	setModelingStep,
+	setModelingTimerId,
+	setPeopleInsideBuilding,
+	setPeopleOutsideBuilding,
+	setScale,
+	setTimeData
 } from '../../store/slices/BuildingViewSlice';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { store } from '../../store';
@@ -22,64 +29,131 @@ import cn from 'classnames';
 import styles from './ModelingViewPage.module.css';
 import FloorInfo from '../../components/modeling/FloorInfo';
 import ControlPanel from '../../components/modeling/ControlPanel';
-import type { TimeData } from '../../BuildingView2D/application/Interfaces/TimeData';
 import { getConfig } from '../../store/actionCreators/getConfig';
-import { bimFiles } from '../../consts/bimFiles';
 import type { BimJson } from '../../interfaces/BimJson';
+import { open } from '@tauri-apps/plugin-dialog';
+import { readTextFile } from '@tauri-apps/plugin-fs';
+import { runEvacuationModeling } from '../../rustCalls';
+import type { BuildElementJson } from '../../interfaces/BuildElementJson';
+import { Mathem } from '../../BuildingView2D/application/mathem/Mathem';
 
 const ModelingViewPage = () => {
-	const [buildingData, setBuildingData] = useState<BimJson>(
-		bimFiles[Object.keys(bimFiles)[0]]
-	);
-
-	const evacuationTimeData = timeData as TimeData;
-	const { currentLevel, scale } = useAppSelector(state => state.buildingViewReducer);
 	const dispatch = useAppDispatch();
+	const { config } = useAppSelector(state => state.configReducer);
+	const {
+		currentLevel,
+		scale,
+		timeData,
+		bim,
+		anchorCoordinates,
+		evacuationTimeStep,
+		evacuationTimeInSec
+	} = useAppSelector(state => state.buildingViewReducer);
+	const [buildingDataIsLoading, setBuildingDataIsLoading] = useState<boolean>(false);
 	const [canMove, setCanMove] = useState<boolean>(false);
-	const [anchorCoordinates, setAnchorCoordinates] = useState<PixiPoint>(
-		new PixiPoint(0, 0)
-	);
-	const [peopleCoordinates, setPeopleCoordinates] = useState<Point[]>(
-		Logic.generatePeopleCoordinates(
-			buildingData.Level[currentLevel],
-			evacuationTimeData.items
-		)
-	);
+	const [mousePoint, setMousePoint] = useState<{ x: number; y: number } | null>(null);
 
 	useEffect(() => {
-		dispatch(setScale(8));
-		void dispatch(getConfig());
-	}, [dispatch]);
-
-	// FIXME: resolve access to state in window events
-	useEffect(() => {
+		if (!bim) {
+			dispatch(setScale(8));
+			void dispatch(getConfig());
+			void openFileDialog();
+		}
 		window.addEventListener('keydown', handleWindowKeydown);
 		return () => {
 			window.removeEventListener('keydown', handleWindowKeydown);
 		};
-	}, [buildingData]);
+	}, []);
 
-	const draw = useCallback(
+	const openFileDialog = async () => {
+		const file = await open({
+			directory: false,
+			multiple: false,
+			title: 'Open BIM file',
+			filters: [{ name: 'BIM json', extensions: ['json'] }]
+		});
+		setBuildingDataIsLoading(true);
+		if (file !== null) {
+			const buildingData = JSON.parse(await readTextFile(file)) as BimJson;
+			try {
+				const modelingResult = await runEvacuationModeling(file, config);
+				dispatch(setScale(1));
+				dispatch(setAnchorCoordinates(new PixiPoint()));
+				dispatch(setModelingStep(0));
+				dispatch(setBim(buildingData));
+				dispatch(setTimeData(modelingResult.distribution_by_time_steps));
+				dispatch(setCurrentLevel(0));
+				dispatch(setPeopleOutsideBuilding(0));
+				dispatch(
+					setPeopleInsideBuilding(
+						Math.floor(
+							Logic.totalNumberOfPeople(modelingResult.distribution_by_time_steps)
+						)
+					)
+				);
+			} catch (e) {
+				console.error(e);
+			}
+		}
+		setBuildingDataIsLoading(false);
+	};
+
+	const drawPeople = useCallback(
 		(g: PixiGraphics) => {
-			g.clear();
-			View.drawBuildingRoomsPixi(g, buildingData.Level[currentLevel].BuildElement);
-			View.drawPeople(g, peopleCoordinates);
+			if (bim) {
+				const rooms = timeData?.items[evacuationTimeStep].rooms ?? [];
+				const peopleCoordinates = Logic.generatePeopleCoordinates(
+					bim.Level[currentLevel],
+					rooms
+				);
+				g.clear();
+				View.drawPeople(g, peopleCoordinates);
+			}
 		},
-		[currentLevel, peopleCoordinates, buildingData]
+		[bim, timeData, currentLevel, evacuationTimeInSec]
 	);
+
+	const drawBuildingElement = useCallback(
+		(g: PixiGraphics, buildingElement: BuildElementJson) => {
+			let color = 'rgb(255, 255, 255)';
+			switch (buildingElement.Sign) {
+				case 'Staircase':
+					color = 'rgb(49, 152, 0)';
+					break;
+				case 'DoorWay':
+				case 'DoorWayInt':
+					color = 'rgb(227, 237, 31)';
+					break;
+				case 'DoorWayOut':
+					color = 'rgb(40, 0, 255)';
+					break;
+			}
+			g.clear();
+			View.drawBuildingRoomPixi(g, buildingElement.XY[0].points, color);
+			g.endFill();
+		},
+		[]
+	);
+
+	const handleOpenFile = async () => {
+		await openFileDialog();
+	};
 
 	const handleCanvasWheel: WheelEventHandler<HTMLCanvasElement> = event => {
 		switch (Math.sign(event.deltaY)) {
 			case -1:
-				dispatch(incrementScale());
+				dispatch(increaseScale());
 				break;
 			case +1:
-				dispatch(decrementScale());
+				dispatch(decreaseScale());
 				break;
 		}
 	};
 
-	const handleCanvasMouseDown: MouseEventHandler<HTMLCanvasElement> = _ => {
+	const handleCanvasMouseDown: MouseEventHandler<HTMLCanvasElement> = (
+		e: React.MouseEvent<HTMLCanvasElement>
+	) => {
+		e.preventDefault();
 		setCanMove(true);
 	};
 
@@ -92,91 +166,161 @@ const ModelingViewPage = () => {
 	};
 
 	const handleCanvasMouseMove: MouseEventHandler<HTMLCanvasElement> = event => {
-		if (canMove) {
-			setAnchorCoordinates(
-				p => new PixiPoint(p.x + event.movementX, p.y + event.movementY)
+		const currentMousePoint = { x: event.screenX, y: event.screenY };
+		if (canMove && mousePoint != null) {
+			dispatch(
+				setAnchorCoordinates(
+					new PixiPoint(
+						anchorCoordinates.x + (currentMousePoint.x - mousePoint.x),
+						anchorCoordinates.y + (currentMousePoint.y - mousePoint.y)
+					)
+				)
 			);
 		}
+		setMousePoint(currentMousePoint);
 	};
 
 	const handleWindowKeydown = (event: KeyboardEvent) => {
 		const {
-			buildingViewReducer: { currentLevel }
+			buildingViewReducer: { currentLevel, bim }
 		} = store.getState();
 		switch (event.key) {
 			case 'ArrowUp':
-				if (currentLevel < buildingData.Level.length - 1) {
+				if (bim && currentLevel < bim.Level.length - 1) {
 					dispatch(incrementCurrentLevel());
-					const {
-						buildingViewReducer: { currentLevel: updatedLevel }
-					} = store.getState();
-					setPeopleCoordinates(
-						Logic.generatePeopleCoordinates(
-							buildingData.Level[updatedLevel],
-							evacuationTimeData.items
-						)
-					);
 				}
 				break;
 			case 'ArrowDown':
-				if (currentLevel > 0) {
+				if (bim && currentLevel > 0) {
 					dispatch(decrementCurrentLevel());
-					const {
-						buildingViewReducer: { currentLevel: updatedLevel }
-					} = store.getState();
-					setPeopleCoordinates(
-						Logic.generatePeopleCoordinates(
-							buildingData.Level[updatedLevel],
-							evacuationTimeData.items
-						)
-					);
 				}
 				break;
 			case '=':
 			case '+':
-				dispatch(incrementScale());
+				dispatch(increaseScale());
 				break;
 			case '-':
 			case '_':
-				dispatch(decrementScale());
+				dispatch(decreaseScale());
 				break;
 		}
 	};
 
-	const handleSelectFileChange = (e: ChangeEvent<HTMLSelectElement>) => {
-		void dispatch(setCurrentLevel(0));
-		setBuildingData(bimFiles[e.target.value]);
-		void dispatch(setBim(bimFiles[e.target.value]));
+	const handleBuildingElementClick = (buildingElement: BuildElementJson) => {
+		const length = Math.abs(
+			buildingElement.XY[0].points[0].x - buildingElement.XY[0].points[2].x
+		);
+		const width = Math.abs(
+			buildingElement.XY[0].points[0].y - buildingElement.XY[0].points[2].y
+		);
+		const peopleDensity = timeData?.items[evacuationTimeStep].rooms.find(
+			room => room.uuid === buildingElement.Id
+		)?.density;
+		dispatch(
+			setBuildingElement({
+				area: Number(Mathem.calculateBuildArea(buildingElement).toFixed(1)),
+				level: currentLevel,
+				type: buildingElement.Sign,
+				name: buildingElement.Name,
+				id: buildingElement.Id,
+				numberOfPeople: Math.round(peopleDensity ?? 0),
+				length,
+				width
+			})
+		);
+	};
+
+	const handlePlayButtonClick = () => {
+		const {
+			buildingViewReducer: { modelingTimerId }
+		} = store.getState();
+		if (!Boolean(modelingTimerId)) {
+			const timerId = window.setInterval(() => {
+				dispatch(incrementModelingStep());
+				const {
+					buildingViewReducer: { evacuationTimeStep, timeData, evacuationTimeInSec }
+				} = store.getState();
+				const numberOfPeopleInsideBuilding =
+					timeData?.items[evacuationTimeStep].rooms
+						.filter(room => room.uuid !== '00000000-0000-0000-0000-000000000000')
+						.reduce((totalDensity, room) => totalDensity + room.density, 0) ?? 0;
+				const numberOfPeopleOutsideBuilding = timeData
+					? Logic.totalNumberOfPeople(timeData) - numberOfPeopleInsideBuilding
+					: 0;
+
+				dispatch(setPeopleInsideBuilding(Math.floor(numberOfPeopleInsideBuilding)));
+				dispatch(setPeopleOutsideBuilding(Math.floor(numberOfPeopleOutsideBuilding)));
+				dispatch(
+					setEvacuationTimeInSec(
+						timeData?.items[evacuationTimeStep].time ?? evacuationTimeInSec
+					)
+				);
+				if (evacuationTimeStep >= (timeData?.items.length ?? 0) - 1) {
+					stopModelingLoop();
+				}
+			}, 100);
+			dispatch(setModelingTimerId(timerId));
+		}
+	};
+
+	const handlePauseButtonClick = () => {
+		stopModelingLoop();
+	};
+
+	const stopModelingLoop = () => {
+		const {
+			buildingViewReducer: { modelingTimerId }
+		} = store.getState();
+		if (Boolean(modelingTimerId)) {
+			window.clearInterval(modelingTimerId);
+			dispatch(setModelingTimerId(undefined));
+		}
 	};
 
 	return (
 		<main className={cn(styles.container, 'text-sm font-medium text-white')}>
-			<FloorInfo
-				fileList={Object.keys(bimFiles)}
-				onSelectChange={handleSelectFileChange}
-			/>
-			<div className="w-full h-full overflow-hidden">
-				<Stage
-					id="canvas"
-					width={window.innerWidth}
-					height={window.innerHeight}
-					options={{ backgroundColor: 0xffffff, antialias: true }}
-					onWheel={handleCanvasWheel}
-					onMouseMove={handleCanvasMouseMove}
-					onMouseDown={handleCanvasMouseDown}
-					onMouseUp={handleCanvasMouseUp}
-					onMouseOut={handleCanvasMouseOut}
-				>
-					<Container scale={scale} x={anchorCoordinates.x} y={anchorCoordinates.y}>
-						<Graphics draw={draw} />
-					</Container>
-				</Stage>
-			</div>
+			<FloorInfo onOpenFile={handleOpenFile} />
+			{bim && !buildingDataIsLoading ? (
+				<div className="w-full h-full overflow-hidden">
+					<Stage
+						id="canvas"
+						width={window.innerWidth}
+						height={window.innerHeight}
+						options={{
+							backgroundColor: 0xffffff,
+							antialias: true
+						}}
+						onWheel={handleCanvasWheel}
+						onMouseMove={handleCanvasMouseMove}
+						onMouseDown={handleCanvasMouseDown}
+						onMouseUp={handleCanvasMouseUp}
+						onMouseOut={handleCanvasMouseOut}
+					>
+						{/*<Stats />*/}
+						<Container scale={scale} x={anchorCoordinates.x} y={anchorCoordinates.y}>
+							{bim.Level[currentLevel].BuildElement.map(buildingElement => (
+								<Graphics
+									key={buildingElement.Id}
+									draw={g => drawBuildingElement(g, buildingElement)}
+									eventMode="static"
+									cursor="pointer"
+									onclick={() => handleBuildingElementClick(buildingElement)}
+								/>
+							))}
+							<Graphics draw={drawPeople} />
+						</Container>
+					</Stage>
+				</div>
+			) : (
+				<div className="flex justify-center items-center">
+					<span className="text-black text-3xl">Загрузка...</span>
+				</div>
+			)}
 			<ControlPanel
-				onPlayButtonClick={() => {}}
-				onPauseButtonClick={() => {}}
-				onSpeedUpButtonClick={() => {}}
-				onSpeedDownButtonClick={() => {}}
+				onPlayButtonClick={handlePlayButtonClick}
+				onPauseButtonClick={handlePauseButtonClick}
+				onIncrementLevelButtonClick={() => {}}
+				onDecrementLevelButtonClick={() => {}}
 			/>
 		</main>
 	);

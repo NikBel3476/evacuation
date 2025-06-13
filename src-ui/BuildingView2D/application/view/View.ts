@@ -2,6 +2,7 @@ import { Canvas } from '../canvas/Canvas';
 import { Mathem } from '../mathem/Mathem';
 import { BuildingElement, Point } from '../Interfaces/Building';
 import { Graphics as PixiGraphics } from '@pixi/graphics';
+import { ColorSource, Polygon } from 'pixi.js';
 
 interface ViewConstructorParams {
 	canvas: Canvas;
@@ -44,27 +45,43 @@ export class View {
 	}
 
 	// Отрисовка комнаты
-	drawBuild(build: BuildingElement) {
+	drawBuild(build: BuildingElement, color?: { r: number; g: number; b: number }) {
 		this.canvas.beginPath();
 		this.drawBox(build.XY[0].points);
-		const RGB = 'rgb(255,255,255)';
+		const RGB = color ? `rgb(${color.r}, ${color.g}, ${color.b}` : 'rgb(255,255,255)';
 		this.canvas.fill(RGB);
 		this.canvas.closePath();
 	}
 
-	static drawBuildingRoomPixi(g: PixiGraphics, points: Point[]) {
+	static drawBuildingRoomPixi(
+		g: PixiGraphics,
+		points: Point[],
+		color: ColorSource = 0xffffff
+	) {
 		g.moveTo(points[0].x, points[0].y);
-		g.beginFill(0xffffff);
+		g.beginFill(color);
 		g.lineStyle(0.1, 0x000000, 1);
-		points.slice(1).forEach(point => {
-			g.lineTo(point.x, point.y);
-		});
+		const polygon = new Polygon(points.slice(1));
+		g.drawShape(polygon);
 		g.endFill();
 	}
 
 	static drawBuildingRoomsPixi(g: PixiGraphics, buildings: BuildingElement[]) {
 		buildings.forEach(building => {
-			View.drawBuildingRoomPixi(g, building.XY[0].points);
+			let color = 'rgb(255, 255, 255)';
+			switch (building.Sign) {
+				case 'Staircase':
+					color = 'rgb(49, 152, 0)';
+					break;
+				case 'DoorWay':
+				case 'DoorWayInt':
+					color = 'rgb(227, 237, 31)';
+					break;
+				case 'DoorWayOut':
+					color = 'rgb(40, 0, 255)';
+					break;
+			}
+			View.drawBuildingRoomPixi(g, building.XY[0].points, color);
 		});
 	}
 
@@ -96,7 +113,22 @@ export class View {
 	// Отрисовка всего
 	render() {
 		this.canvas.clear();
-		this.data.activeBuilds.forEach(build => this.drawBuild(build));
+		this.data.activeBuilds.forEach(build => {
+			let color = { r: 255, g: 255, b: 255 };
+			switch (build.Sign) {
+				case 'Staircase':
+					color = { r: 49, g: 152, b: 0 };
+					break;
+				case 'DoorWay':
+				case 'DoorWayInt':
+					color = { r: 227, g: 237, b: 31 };
+					break;
+				case 'DoorWayOut':
+					color = { r: 40, g: 0, b: 255 };
+					break;
+			}
+			this.drawBuild(build, color);
+		});
 		this.activePeople.forEach(people => this.drawPeople(people, this.data.activeBuilds));
 		this.canvas.print();
 	}

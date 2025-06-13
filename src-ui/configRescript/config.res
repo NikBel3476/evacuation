@@ -1,10 +1,10 @@
 open Webapi.Dom
 open Promise
 
-// %%raw(`import { invoke } from '@tauri-apps/api';`)
+// %%raw(`import { invoke } from '@tauri-apps/api/core';`)
 
 // TODO: complete binding
-@module("@tauri-apps/api")
+@module("@tauri-apps/api/core")
 external invoke: (~cmd: string, ~args: {..}=?, unit) => Promise.t<{..}> = "invoke"
 
 let errorHandler = (errorMessage: string) => {

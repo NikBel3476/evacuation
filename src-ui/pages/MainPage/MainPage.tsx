@@ -1,11 +1,20 @@
-import { invoke } from '@tauri-apps/api/tauri';
-import { FC } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 import styles from './MainPage.module.css';
 import RouterLink from '../../components/RouterLink';
 import Button from '../../components/Button/Button';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
+import { useEffect } from 'react';
+import { getConfig } from '../../store/actionCreators/getConfig';
 
-const MainPage: FC = () => {
+const MainPage = () => {
+	const dispatch = useAppDispatch();
+	const { config } = useAppSelector(state => state.configReducer);
+
+	useEffect(() => {
+		void dispatch(getConfig());
+	}, []);
+
 	const handleOpenConfigurationButtonClick = () => {
 		void invoke('open_configuration_window');
 	};
@@ -23,7 +32,7 @@ const MainPage: FC = () => {
 	};
 
 	const handleBimStartButtonClick = () => {
-		void invoke('bim_start');
+		void invoke('bim_start', { scenarioConfiguration: config });
 	};
 
 	const handleRunPythonButtonClick = () => {
@@ -41,11 +50,11 @@ const MainPage: FC = () => {
 						<li>
 							<RouterLink to="configuration">Страница конфигурации</RouterLink>
 						</li>
-						<li>
+						{/*<li>
 							<RouterLink to="peopleTraffic">
 								Страница визуализации моделирования эвакуации
 							</RouterLink>
-						</li>
+						</li>*/}
 						<li>
 							<Button onClick={handleOpenConfigurationButtonClick}>
 								Открыть окно настроек
@@ -74,12 +83,12 @@ const MainPage: FC = () => {
 						</li>
 						<li>
 							<RouterLink to="modelingView">
-								Страница визуализации моделирования(Pixi.js)
+								Страница визуализации моделирования
 							</RouterLink>
 						</li>
-						<li>
+						{/*<li>
 							<Button onClick={handleRunPythonButtonClick}>Запустить python</Button>
-						</li>
+						</li>*/}
 					</ul>
 				</nav>
 			</header>

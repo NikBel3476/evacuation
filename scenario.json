@@ -19,7 +19,7 @@
   "loggerCfg": "../logger.conf",
   "distribution": {
     "type": "uniform",
-    "density": 1,
+    "density": 1.0,
     "special": [
       {
         "uuid": [

@@ -1,15 +1,15 @@
-import React, { ChangeEvent, FC } from 'react';
+import type { FC, MouseEventHandler } from 'react';
+import React from 'react';
 import { useAppSelector } from '../../../hooks/redux';
 import { Link } from 'react-router-dom';
-import Select from '../../Select';
+import Button from '../../Button';
 
 interface FloorInfoProps {
 	className?: string;
-	fileList: string[];
-	onSelectChange?: (e: ChangeEvent<HTMLSelectElement>) => void;
+	onOpenFile: MouseEventHandler;
 }
 
-const FloorInfo: FC<FloorInfoProps> = ({ className, fileList, onSelectChange }) => {
+const FloorInfo: FC<FloorInfoProps> = ({ className, onOpenFile }) => {
 	const { currentLevel, buildingElement } = useAppSelector(
 		state => state.buildingViewReducer
 	);
@@ -17,9 +17,7 @@ const FloorInfo: FC<FloorInfoProps> = ({ className, fileList, onSelectChange }) 
 	return (
 		<aside
 			className={
-				'p-4 bg-sky-400 grid grid-cols-1 gap-y-2 content-start' +
-					' ' +
-					String(className) ?? ''
+				'p-4 bg-sky-400 grid grid-cols-1 gap-y-2 content-start' + ' ' + String(className)
 			}
 		>
 			<Link
@@ -28,12 +26,8 @@ const FloorInfo: FC<FloorInfoProps> = ({ className, fileList, onSelectChange }) 
 			>
 				Main page
 			</Link>
-			<Select
-				className="text-black"
-				options={fileList.map(file => ({ key: file, value: file }))}
-				onChange={onSelectChange}
-			/>
-			<p className="text-lg">Этаж: {currentLevel}</p>
+			<Button onClick={onOpenFile}>Открыть файл</Button>
+			<p className="text-lg">Этаж: {currentLevel + 1}</p>
 			<h2 className="text-xl">Данные о помещении</h2>
 			<p>
 				<span className="block">Уровень этажа:</span>
@@ -58,6 +52,14 @@ const FloorInfo: FC<FloorInfoProps> = ({ className, fileList, onSelectChange }) 
 			<p>
 				<span className="block">Площадь:</span>
 				{buildingElement !== null && <span>{buildingElement.area} м^2</span>}
+			</p>
+			<p>
+				<span className="block">Длина:</span>
+				{buildingElement?.length.toFixed(1)}
+			</p>
+			<p>
+				<span className="block">Ширина:</span>
+				{buildingElement?.width.toFixed(1)}
 			</p>
 		</aside>
 	);

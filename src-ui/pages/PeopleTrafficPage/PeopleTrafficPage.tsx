@@ -1,5 +1,5 @@
-import type { FC, MouseEventHandler, WheelEventHandler } from 'react';
-import React, { useEffect, useState } from 'react';
+import type { MouseEventHandler, WheelEventHandler } from 'react';
+import React, { useState, useCallback } from 'react';
 import cn from 'classnames';
 import styles from './PeopleTrafficPage.module.css';
 import FloorInfo from '../../components/modeling/FloorInfo';
@@ -9,35 +9,115 @@ import { App } from '../../BuildingView2D/application/app';
 import {
 	decrementCurrentLevel,
 	incrementCurrentLevel,
-	setBuildingElement
+	setBim,
+	setBuildingElement,
+	setCurrentLevel,
+	setElementNumberOfPeople,
+	setPeopleInsideBuilding,
+	setPeopleOutsideBuilding
 } from '../../store/slices/BuildingViewSlice';
-import { useAppDispatch } from '../../hooks/redux';
-import type { FileEntry } from '@tauri-apps/api/fs';
-import { readDir, BaseDirectory } from '@tauri-apps/api/fs';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
+import type { DirEntry } from '@tauri-apps/plugin-fs';
+import { readDir, BaseDirectory, readTextFile } from '@tauri-apps/plugin-fs';
+import { Building } from '../../BuildingView2D/application/Interfaces/Building';
+import { open } from '@tauri-apps/plugin-dialog';
+import { runEvacuationModeling } from '../../rustCalls';
 
-const PeopleTrafficPage: FC = _ => {
-	const [bimFiles, setBimFiles] = useState<FileEntry[]>([]);
-	let app: App | null = null;
+let app: App | null = null;
+
+const PeopleTrafficPage = () => {
 	const dispatch = useAppDispatch();
+	const { config } = useAppSelector(state => state.configReducer);
+	const [bimFileEntries, setBimFileEntries] = useState<DirEntry[]>([]);
+	const [bimFileIsLoading, setBimFileIsLoading] = useState<boolean>(true);
 
-	useEffect(() => {
-		void loadBimFiles();
-	}, []);
-
-	const loadBimFiles = async () => {
-		const files = await readDir('resources', { dir: BaseDirectory.AppData });
-		setBimFiles(files);
+	const onModelingTick = (numberOfPeople: number, numberOfEvacuatedPeople: number) => {
+		if (app) {
+			dispatch(setElementNumberOfPeople(app.logic.totalNumberOfPeople()));
+			dispatch(setPeopleInsideBuilding(numberOfPeople));
+			dispatch(setPeopleOutsideBuilding(numberOfEvacuatedPeople));
+		}
 	};
 
-	const onBuildingViewMount = () => {
-		app = new App('field', 'canvas_container');
+	const onBuildingViewMount = useCallback(async () => {
+		const files = await readDir('resources', { baseDir: BaseDirectory.AppData });
+		setBimFileEntries(
+			files.filter(dirEntry => dirEntry.isFile && dirEntry.name.endsWith('.json'))
+		);
+		const bimFile = files[2].name;
+		const buildingData = await readTextFile(bimFile);
+		const modelingResult = await runEvacuationModeling(bimFile, config);
+		app = new App(
+			'field',
+			'canvas_container',
+			JSON.parse(buildingData),
+			modelingResult.distribution_by_time_steps,
+			onModelingTick
+		);
 		app.startRendering();
 		window.addEventListener('keydown', handleWindowKeydown);
-	};
+		setBimFileIsLoading(false);
+	}, []);
 
-	const onBuildingViewUnmount = () => {
+	const onBuildingViewUnmount = useCallback(() => {
 		app?.stopRendering();
 		window.removeEventListener('keydown', handleWindowKeydown);
+	}, []);
+
+	const handleOpenFile = async () => {
+		const filePaths = await open({
+			directory: false,
+			multiple: false,
+			title: 'Open BIM file',
+			filters: [{ name: 'BIM json', extensions: ['json'] }]
+		});
+		setBimFileIsLoading(true);
+		const filePath = filePaths instanceof Array ? filePaths[0] : filePaths ?? '';
+		const buildingData = JSON.parse(await readTextFile(filePath)) as Building;
+		if (app && Boolean(buildingData)) {
+			try {
+				const modelingResult = await runEvacuationModeling(filePath, config);
+				app.logic.timeData = modelingResult.distribution_by_time_steps;
+				app.setTimeData(modelingResult.distribution_by_time_steps);
+			} catch (e) {
+				console.error(e);
+			}
+			app.logic.level = 0;
+			app.server.data = buildingData;
+			app.logic.struct = buildingData;
+			app.logic.updateBuildsInCamera();
+			app.logic.updatePeopleInBuilds();
+			app.logic.updatePeopleInCamera();
+			app.ui.evacuationTimeInSec = 0;
+			dispatch(setCurrentLevel(0));
+			dispatch(setPeopleInsideBuilding(app.logic.totalNumberOfPeople()));
+			dispatch(setPeopleOutsideBuilding(0));
+			// void dispatch(setBim(buildingData));
+		}
+		setBimFileIsLoading(false);
+	};
+
+	const handleSelectFileChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+		// const buildingData = bimFiles[`../res/${e.target.value}`];
+		setBimFileIsLoading(true);
+		const dirEntry = bimFileEntries.find(fileEntry => fileEntry.name === e.target.value);
+		const buildingData = JSON.parse(await readTextFile(dirEntry?.name ?? '')) as Building;
+		if (app && Boolean(buildingData)) {
+			// FIXME: handle state when timeData is undefined
+			// const timeData = timeDataFiles[`../res/${e.target.value}`];
+			// if (timeData) {
+			// 	app.logic.timeData = JSON.parse(timeData) as TimeData;
+			// }
+
+			app.logic.level = 0;
+			dispatch(setCurrentLevel(0));
+			app.server.data = buildingData;
+			app.logic.struct = buildingData;
+			app.logic.updateBuildsInCamera();
+			app.logic.updatePeopleInBuilds();
+			app.logic.updatePeopleInCamera();
+		}
+		setBimFileIsLoading(false);
 	};
 
 	const handleWindowKeydown = (event: KeyboardEvent) => {
@@ -69,23 +149,37 @@ const PeopleTrafficPage: FC = _ => {
 		}
 	};
 
-	const handleCanvasDoubleClick: MouseEventHandler<HTMLCanvasElement> = event => {
-		app?.logic.toChoiceBuild(event);
-		if (app?.logic.choiceBuild) {
-			dispatch(
-				setBuildingElement({
-					id: app.logic.choiceBuild.Id,
-					area: Math.floor(app.mathem.calculateBuildArea(app.logic.choiceBuild)),
-					name: app.logic.choiceBuild.Name,
-					type: app.logic.choiceBuild.Sign,
-					level: app.logic.struct.Level[app.logic.level].ZLevel,
-					numberOfPeople: app.logic.getPeopleCountInChoiceRoom()
-				})
-			);
-		}
-	};
+	const handleCanvasDoubleClick: MouseEventHandler<HTMLCanvasElement> = useCallback(
+		event => {
+			app?.logic.toChoiceBuild(event);
+			if (app?.logic.choiceBuild) {
+				// TODO: it's working only with rooms that have rectangular shape
+				const length = Math.abs(
+					app.logic.choiceBuild.XY[0].points[0].x -
+						app.logic.choiceBuild.XY[0].points[2].x
+				);
+				const width = Math.abs(
+					app.logic.choiceBuild.XY[0].points[0].y -
+						app.logic.choiceBuild.XY[0].points[2].y
+				);
+				dispatch(
+					setBuildingElement({
+						id: app.logic.choiceBuild.Id,
+						area: Math.floor(app.mathem.calculateBuildArea(app.logic.choiceBuild)),
+						name: app.logic.choiceBuild.Name,
+						type: app.logic.choiceBuild.Sign,
+						level: app.logic.struct.Level[app.logic.level].ZLevel,
+						numberOfPeople: app.logic.getPeopleCountInChoiceRoom(),
+						length,
+						width
+					})
+				);
+			}
+		},
+		[]
+	);
 
-	const handleCanvasWheel: WheelEventHandler<HTMLCanvasElement> = event => {
+	const handleCanvasWheel: WheelEventHandler<HTMLCanvasElement> = useCallback(event => {
 		if (app) {
 			switch (Math.sign(event.deltaY)) {
 				case -1: // Увеличить zoom
@@ -98,32 +192,38 @@ const PeopleTrafficPage: FC = _ => {
 			app.logic.updateBuildsInCamera();
 			app.logic.updatePeopleInCamera();
 		}
-	};
+	}, []);
 
-	const handleCanvasMouseDown: MouseEventHandler<HTMLCanvasElement> = event => {
-		event.preventDefault();
-		if (app) {
-			app.canMove = true;
-		}
-	};
+	const handleCanvasMouseDown: MouseEventHandler<HTMLCanvasElement> = useCallback(
+		event => {
+			event.preventDefault();
+			if (app) {
+				app.canMove = true;
+			}
+		},
+		[]
+	);
 
-	const handleCanvasMouseUp: MouseEventHandler<HTMLCanvasElement> = _ => {
-		if (app) {
-			app.canMove = false;
-		}
-	};
-
-	const handleCanvasMouseOut: MouseEventHandler<HTMLCanvasElement> = _ => {
+	const handleCanvasMouseUp: MouseEventHandler<HTMLCanvasElement> = useCallback(_ => {
 		if (app) {
 			app.canMove = false;
 		}
-	};
+	}, []);
 
-	const handleCanvasMouseMove: MouseEventHandler<HTMLCanvasElement> = event => {
-		if (app?.canMove === true) {
-			app.logic.mouseMove(event);
+	const handleCanvasMouseOut: MouseEventHandler<HTMLCanvasElement> = useCallback(_ => {
+		if (app) {
+			app.canMove = false;
 		}
-	};
+	}, []);
+
+	const handleCanvasMouseMove: MouseEventHandler<HTMLCanvasElement> = useCallback(
+		event => {
+			if (app?.canMove === true) {
+				app.logic.mouseMove(event);
+			}
+		},
+		[]
+	);
 
 	const handlePlayButtonClick: MouseEventHandler = _ => {
 		if (app?.timerTimeDataUpdatePause === true) {
@@ -160,7 +260,23 @@ const PeopleTrafficPage: FC = _ => {
 
 	return (
 		<main className={cn(styles.container, 'text-sm font-medium text-white')}>
-			<FloorInfo fileList={bimFiles.map(file => file.name ?? 'Undefined name')} />
+			<FloorInfo onOpenFile={handleOpenFile} />
+			{/*{bimFileIsLoading ? (
+				<div className="flex items-center justify-center">
+					<span className="text-black text-3xl">Загрузка...</span>
+				</div>
+			) : (
+				<BuildingView
+					onMount={onBuildingViewMount}
+					onUnmount={onBuildingViewUnmount}
+					onCanvasDoubleClick={handleCanvasDoubleClick}
+					onCanvasWheel={handleCanvasWheel}
+					onCanvasMouseDown={handleCanvasMouseDown}
+					onCanvasMouseUp={handleCanvasMouseUp}
+					onCanvasMouseOut={handleCanvasMouseOut}
+					onCanvasMouseMove={handleCanvasMouseMove}
+				/>
+			)}*/}
 			<BuildingView
 				onMount={onBuildingViewMount}
 				onUnmount={onBuildingViewUnmount}
@@ -174,8 +290,8 @@ const PeopleTrafficPage: FC = _ => {
 			<ControlPanel
 				onPlayButtonClick={handlePlayButtonClick}
 				onPauseButtonClick={handlePauseButtonClick}
-				onSpeedUpButtonClick={handleSpeedUpButtonClick}
-				onSpeedDownButtonClick={handleSpeedDownButtonClick}
+				onIncrementLevelButtonClick={handleSpeedUpButtonClick}
+				onDecrementLevelButtonClick={handleSpeedDownButtonClick}
 			/>
 		</main>
 	);

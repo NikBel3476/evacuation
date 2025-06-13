@@ -1,31 +1,42 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { BuildingElement } from '../../interfaces/BuildingElement';
-import { BimJson } from '../../interfaces/BimJson';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
+import type { BuildingElement } from '../../interfaces/BuildingElement';
+import type { BimJson } from '../../interfaces/BimJson';
+import type { TimeData } from '../../BuildingView2D/application/Interfaces/TimeData';
+import { Point } from 'pixi.js';
+
+type BuildingElementExtended = BuildingElement & { length: number; width: number };
 
 interface BuildingViewState {
-	buildingElement: BuildingElement | null;
+	buildingElement: BuildingElementExtended | null;
 	currentLevel: number;
 	scale: number;
-	evacuationTime: number;
+	evacuationTimeInSec: number;
+	evacuationTimeStep: number;
 	numberOfPeopleInsideBuilding: number;
 	numberOfPeopleOutsideBuilding: number;
 	bim?: BimJson;
+	timeData?: TimeData;
+	anchorCoordinates: Point;
+	modelingTimerId?: number;
 }
 
 const initialState: BuildingViewState = {
 	buildingElement: null,
 	currentLevel: 0,
 	scale: 1,
-	evacuationTime: 0,
+	evacuationTimeInSec: 0,
+	evacuationTimeStep: 0,
 	numberOfPeopleInsideBuilding: 0,
-	numberOfPeopleOutsideBuilding: 0
+	numberOfPeopleOutsideBuilding: 0,
+	anchorCoordinates: new Point(0, 0)
 };
 
 export const buildingViewSlice = createSlice({
 	name: 'floor',
 	initialState,
 	reducers: {
-		setBuildingElement: (state, action: PayloadAction<BuildingElement>) => {
+		setBuildingElement: (state, action: PayloadAction<BuildingElementExtended>) => {
 			state.buildingElement = {
 				...action.payload
 			};
@@ -72,20 +83,26 @@ export const buildingViewSlice = createSlice({
 		setScale: (state, action: PayloadAction<number>) => {
 			state.scale = action.payload;
 		},
-		incrementScale: state => {
-			state.scale += 0.1;
+		increaseScale: state => {
+			state.scale *= 1.25;
 		},
 		incrementScaleBy: (state, action: PayloadAction<number>) => {
 			state.scale += action.payload;
 		},
-		decrementScale: state => {
-			state.scale -= 0.1;
+		decreaseScale: state => {
+			state.scale /= 1.25;
 		},
 		decrementScaleBy: (state, action: PayloadAction<number>) => {
 			state.scale -= action.payload;
 		},
-		incrementEvacuationTime: state => {
-			state.evacuationTime++;
+		incrementEvacuationTimeStep: state => {
+			state.evacuationTimeStep++;
+		},
+		setEvacuationTimeInSec: (state, action: PayloadAction<number>) => {
+			state.evacuationTimeInSec = action.payload;
+		},
+		setEvacuationTimeStep: (state, action: PayloadAction<number>) => {
+			state.evacuationTimeStep = action.payload;
 		},
 		setPeopleInsideBuilding: (state, action: PayloadAction<number>) => {
 			state.numberOfPeopleInsideBuilding = action.payload;
@@ -95,6 +112,21 @@ export const buildingViewSlice = createSlice({
 		},
 		setBim: (state, action: PayloadAction<BimJson>) => {
 			state.bim = action.payload;
+		},
+		setTimeData: (state, action: PayloadAction<TimeData>) => {
+			state.timeData = action.payload;
+		},
+		setAnchorCoordinates: (state, action: PayloadAction<Point>) => {
+			state.anchorCoordinates = action.payload;
+		},
+		setModelingTimerId: (state, action: PayloadAction<number | undefined>) => {
+			state.modelingTimerId = action.payload;
+		},
+		setModelingStep: (state, action: PayloadAction<number>) => {
+			state.evacuationTimeStep = action.payload;
+		},
+		incrementModelingStep: state => {
+			state.evacuationTimeStep++;
 		}
 	}
 });
@@ -111,14 +143,21 @@ export const {
 	decrementCurrentLevel,
 	setCurrentLevel,
 	setScale,
-	incrementScale,
+	increaseScale,
 	incrementScaleBy,
-	decrementScale,
+	decreaseScale,
 	decrementScaleBy,
-	incrementEvacuationTime,
+	setEvacuationTimeInSec,
+	incrementEvacuationTimeStep,
+	setEvacuationTimeStep,
 	setPeopleInsideBuilding,
 	setPeopleOutsideBuilding,
-	setBim
+	setBim,
+	setTimeData,
+	setAnchorCoordinates,
+	setModelingTimerId,
+	incrementModelingStep,
+	setModelingStep
 } = buildingViewSlice.actions;
 
 export default buildingViewSlice.reducer;

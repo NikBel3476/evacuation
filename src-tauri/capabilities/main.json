@@ -1,0 +1,19 @@
+{
+    "identifier": "main-capability",
+    "description": "Capability for the main window",
+    "windows": ["evacuation"],
+    "permissions": [
+        "core:path:default",
+        "core:event:default",
+        "core:window:default",
+        "core:app:default",
+        "core:resources:default",
+        "core:menu:default",
+        "core:tray:default",
+        "core:window:allow-set-title",
+        "dialog:allow-open",
+        "dialog:allow-save",
+        "fs:allow-read-text-file",
+        "fs:allow-read-dir"
+    ]
+}

@@ -6,6 +6,7 @@ import typescriptParser from '@typescript-eslint/parser';
 import cypress from 'eslint-plugin-cypress';
 import reactHooks from 'eslint-plugin-react-hooks';
 import storybook from 'eslint-plugin-storybook';
+import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default [
 	{
@@ -20,6 +21,7 @@ export default [
 			'src-ui/peopleTraffic/js/vendor',
 			'coverage/',
 			'test/',
+			'.storybook/',
 			'eslint.config.js',
 			'vite.config.ts',
 			'cypress.config.ts',
@@ -285,5 +287,6 @@ export default [
 			'cypress/no-async-tests': 'error',
 			'cypress/unsafe-to-chain-command': 'error'
 		}
-	}
+	},
+	eslintConfigPrettier
 ];

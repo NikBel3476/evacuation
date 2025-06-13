@@ -23,7 +23,7 @@ export const bimFiles: Record<string, BimJson> = {
 	'../res/udsu_b2_L4_v1_190701.json': udsu_b2_L4_v1 as BimJson,
 	'../res/udsu_b3_L3_v1_190701.json': udsu_b3_L3_v1 as BimJson,
 	'../res/udsu_b4_L5_v1_190701.json': udsu_b4_L5_v1 as BimJson,
-	'../res/udsu_b5_L4_v1_190701.json': udsu_b5_L4_v1 as BimJson,
+	'../res/udsu_b5_L4_v1_200102.json': udsu_b5_L4_v1 as BimJson,
 	'../res/udsu_b7_L8_v1_190701.json': udsu_b7_L8_v1 as BimJson,
 	'../res/test_school': testSchool as BimJson
 };
